@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Talk Points</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        /* Search Area */
+        .search-container {
+            position: sticky;
+            top: 0;
+            background: #1a1a2e;
+            padding: 15px 0 20px;
+            z-index: 100;
+        }
+
+        #search {
+            width: 100%;
+            padding: 16px 24px;
+            font-size: 20px;
+            border: 2px solid #333;
+            border-radius: 12px;
+            background: #16213e;
+            color: #fff;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #search:focus {
+            border-color: #4a9eff;
+        }
+
+        #search::placeholder {
+            color: #666;
+        }
+
+        .hint {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .hint kbd {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        /* Topics List */
+        .topics-list {
+            margin-top: 10px;
+        }
+
+        .topic-card {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 24px 28px;
+            margin-bottom: 16px;
+            border-left: 4px solid #4a9eff;
+            display: none;
+            animation: fadeIn 0.15s ease;
+        }
+
+        .topic-card.visible {
+            display: block;
+        }
+
+        .topic-card.highlighted {
+            border-left-color: #00d4aa;
+            background: #1a2744;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .topic-title {
+            font-size: 26px;
+            font-weight: 600;
+            color: #4a9eff;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .topic-card.highlighted .topic-title {
+            color: #00d4aa;
+        }
+
+        .topic-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .tag {
+            background: #2a3f5f;
+            color: #8ab4f8;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+
+        .points-list {
+            list-style: none;
+        }
+
+        .points-list li {
+            font-size: 22px;
+            line-height: 1.5;
+            padding: 10px 0;
+            padding-left: 24px;
+            position: relative;
+            color: #ddd;
+        }
+
+        .points-list li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #4a9eff;
+            font-weight: bold;
+        }
+
+        .topic-card.highlighted .points-list li::before {
+            color: #00d4aa;
+        }
+
+        /* Shortcut Badge */
+        .shortcut-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #00d4aa, #00b894);
+            color: #1a1a2e;
+            font-weight: 700;
+            font-size: 16px;
+            border-radius: 8px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .shortcut-key {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            background: #2a3f5f;
+            color: #00d4aa;
+            font-weight: 700;
+            font-size: 13px;
+            border-radius: 6px;
+            margin-right: 10px;
+        }
+
+        /* Architecture Diagram */
+        .topic-diagram {
+            margin: 16px 0 20px;
+            text-align: center;
+        }
+
+        .topic-diagram img {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 12px;
+            background: #fff;
+            padding: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .topic-diagram img:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 32px rgba(0, 212, 170, 0.3);
+        }
+
+        /* Fullscreen overlay for diagram */
+        .diagram-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .diagram-overlay.visible {
+            display: flex;
+        }
+
+        .diagram-overlay img {
+            max-width: 95%;
+            max-height: 95%;
+            border-radius: 12px;
+            background: #fff;
+            padding: 20px;
+        }
+
+        /* Walkthrough Content */
+        .walkthrough-content {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 2px solid #2a3f5f;
+        }
+
+        .walkthrough-content h3 {
+            color: #4a9eff;
+            font-size: 22px;
+            margin: 24px 0 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #2a3f5f;
+        }
+
+        .walkthrough-content h3:first-child {
+            margin-top: 0;
+        }
+
+        .walkthrough-content h4 {
+            color: #00d4aa;
+            font-size: 18px;
+            margin: 20px 0 10px;
+        }
+
+        .walkthrough-content p {
+            color: #ccc;
+            font-size: 18px;
+            line-height: 1.6;
+            margin: 12px 0;
+        }
+
+        .walkthrough-content strong {
+            color: #fff;
+        }
+
+        .walkthrough-content ul,
+        .walkthrough-content ol {
+            margin: 12px 0 12px 24px;
+            color: #ccc;
+        }
+
+        .walkthrough-content li {
+            font-size: 17px;
+            line-height: 1.6;
+            margin: 8px 0;
+        }
+
+        .walkthrough-content pre {
+            background: #0d1b2a;
+            border: 1px solid #2a3f5f;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            color: #00d4aa;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+
+        .walkthrough-content code {
+            background: #2a3f5f;
+            color: #00d4aa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 15px;
+        }
+
+        .walkthrough-content hr {
+            border: none;
+            border-top: 2px solid #2a3f5f;
+            margin: 28px 0;
+        }
+
+        /* Counter */
+        .counter {
+            text-align: center;
+            padding: 20px;
+            color: #555;
+            font-size: 14px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #555;
+        }
+
+        .empty-state h2 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        /* Edit Mode Button */
+        .edit-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #333;
+            color: #888;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .edit-toggle:hover {
+            background: #444;
+            color: #fff;
+        }
+
+        /* All Topics View */
+        .show-all .topic-card {
+            display: block;
+        }
+
+        /* Index View */
+        .index-view {
+            display: none;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 20px 0;
+        }
+
+        .index-view.visible {
+            display: flex;
+        }
+
+        .index-item {
+            background: #16213e;
+            padding: 12px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-size: 15px;
+        }
+
+        .index-item:hover {
+            background: #2a3f5f;
+            transform: translateY(-2px);
+        }
+
+        /* Mode Toggle */
+        .mode-toggle {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .mode-btn {
+            background: #16213e;
+            border: 1px solid #333;
+            color: #888;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .mode-btn:hover,
+        .mode-btn.active {
+            background: #2a3f5f;
+            color: #fff;
+            border-color: #4a9eff;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="search-container">
+            <input type="text" id="search" placeholder="Type to find topic... (e.g., 'cloud', 'team', 'metrics')"
+                autocomplete="off" autofocus>
+            <div class="hint">
+                <kbd>A-Z</kbd> jump to topic &nbsp;
+                <kbd>↑↓</kbd> navigate &nbsp;
+                <kbd>Esc</kbd> clear &nbsp;
+                <kbd>Tab</kbd> show all
+            </div>
+            <div class="mode-toggle">
+                <button class="mode-btn active" data-mode="search">Search Mode</button>
+                <button class="mode-btn" data-mode="index">Index View</button>
+                <button class="mode-btn" data-mode="all">Show All</button>
+            </div>
+        </div>
+
+        <div class="index-view" id="indexView"></div>
+
+        <div class="topics-list" id="topicsList"></div>
+
+        <div class="counter" id="counter"></div>
+    </div>
+
+    <!-- Fullscreen diagram overlay -->
+    <div class="diagram-overlay" id="diagramOverlay" onclick="closeDiagram()">
+        <img id="overlayImage" src="" alt="Architecture Diagram">
+    </div>
+
+    <button class="edit-toggle" onclick="openEditor()">✏️ Edit Topics</button>
+
+    <script>
+        // =====================================================
+        // YOUR TOPICS DATA - EDIT THIS SECTION
+        // =====================================================
+        let topics = [
+            {
+                shortcut: "",
+                title: "API Gateway",
+                tags: ["routing", "rate-limiting", "authentication", "load-balancing"],
+                points: [
+                    "Single entry point for all microservices",
+                    "Rate Limiting: Token bucket or sliding window algorithm",
+                    "Authentication: JWT validation, OAuth 2.0 integration",
+                    "Load Balancing: Round-robin, least connections, consistent hashing",
+                    "Caching: Response caching for GET requests",
+                    "Circuit Breaker: Prevent cascade failures",
+                    "Examples: Kong, AWS API Gateway, Nginx"
+                ]
+            },
+            {
+                shortcut: "B",
+                title: "Bitly - URL Shortener",
+                image: "diagrams/bitly.png",
+                tags: ["hashing", "database", "caching", "scale"],
+                points: [],
+                walkthrough: `
+<h3>Phase 1: Requirements (2-3 mins)</h3>
+<p><strong>What to say:</strong> "Let me clarify the requirements upfront"</p>
+
+<p><strong>Functional (30 secs):</strong></p>
+<ul>
+    <li>Create short URL (with optional custom alias/expiration)</li>
+    <li>Redirect short URL → original URL</li>
+</ul>
+
+<p><strong>Non-functional (1.5 mins):</strong></p>
+<ul>
+    <li>Scale: 1B URLs, 100M DAU</li>
+    <li>Read:Write ratio 1000:1 (critical for architecture decisions)</li>
+    <li>Latency: <100ms redirect</li>
+    <li>Availability: 99.99%</li>
+</ul>
+
+<p><strong>Stop here:</strong> Don't list every possible feature. Focus on the 3-4 that drive design decisions.</p>
+
+<hr>
+
+<h3>Phase 2: Core Entities & API (1-2 mins)</h3>
+<p><strong>Quick whiteboard:</strong></p>
+<pre>Entities: URL(short_code, original_url, created_at, expires_at)
+
+API:
+POST /urls → {short_url}
+GET /{code} → 302 redirect</pre>
+
+<p><strong>Why this works:</strong> You've established the contract. Don't dwell on every field—mention you'll detail the data model during deep dives.</p>
+
+<hr>
+
+<h3>Phase 3: High-Level Architecture (2-3 mins)</h3>
+<p><strong>Draw the flow:</strong></p>
+<pre>Client → Load Balancer → [Write Service | Read Service] → Database
+                    ↓                        ↓
+             Global Counter           Cache (Redis)</pre>
+
+<p><strong>Key callouts (30 secs each):</strong></p>
+<ol>
+    <li><strong>Separation of concerns:</strong> Write Service handles creation, Read Service handles redirects</li>
+    <li><strong>Caching strategy:</strong> Redis for hot URLs (addresses 1000:1 read ratio)</li>
+    <li><strong>Database choice:</strong> Postgres/MySQL sufficient for 1B URLs (~500GB)</li>
+</ol>
+
+<p><strong>Don't:</strong> Spend time on load balancer mechanics or basic patterns. Save time for deep dives.</p>
+
+<hr>
+
+<h3>Phase 4: Critical Deep Dives (6-8 mins)</h3>
+<p><strong>This is where you differentiate yourself.</strong> Pick 2-3 based on interviewer interest:</p>
+
+<h4>Deep Dive A: Short Code Generation (2-3 mins)</h4>
+<p><strong>The problem:</strong> Need globally unique, compact codes</p>
+<p><strong>Solution:</strong> Base62 encoding with global counter</p>
+<ul>
+    <li>1B URLs = 6 characters (62^6 = 56B)</li>
+    <li>Counter stored in Redis (atomic increment)</li>
+    <li>Write Service: <code>INCR counter → Base62(value) → store mapping</code></li>
+</ul>
+
+<p><strong>Trade-off mention:</strong> "Hash-based approaches (MD5/SHA) are simpler but risk collisions and require longer codes. Counter guarantees uniqueness but needs distributed consensus."</p>
+
+<p><strong>Advanced point (if time):</strong> Counter batching to reduce Redis calls—each Write Service instance gets a batch of 1000 values</p>
+
+<h4>Deep Dive B: Fast Redirects (<100ms) (2-3 mins)</h4>
+<p><strong>The problem:</strong> Billions of URLs, can't do full table scans</p>
+
+<p><strong>Layered approach:</strong></p>
+<ol>
+    <li><strong>L1 - In-memory cache (Redis):</strong>
+        <ul>
+            <li>Cache hot URLs (80/20 rule)</li>
+            <li>TTL matches URL expiration</li>
+            <li>Hit rate: 95%+</li>
+        </ul>
+    </li>
+    <li><strong>L2 - Database index:</strong>
+        <ul>
+            <li>B-tree index on <code>short_code</code> column</li>
+            <li>O(log n) lookups</li>
+        </ul>
+    </li>
+    <li><strong>L3 - CDN/Edge (bonus):</strong>
+        <ul>
+            <li>302 redirects at edge locations</li>
+            <li>Reduces latency for popular links</li>
+        </ul>
+    </li>
+</ol>
+
+<p><strong>Key metric:</strong> "With Redis hit rate >95%, most redirects never touch the database"</p>
+
+<h4>Deep Dive C: Scaling to 1B URLs (2 mins)</h4>
+<p><strong>Horizontal scaling strategy:</strong></p>
+
+<p><strong>Read Service:</strong></p>
+<ul>
+    <li>Stateless—add more instances behind load balancer</li>
+    <li>Redis cluster for cache distribution</li>
+    <li>Database read replicas (read-heavy workload)</li>
+</ul>
+
+<p><strong>Write Service:</strong></p>
+<ul>
+    <li>Challenge: Global counter needs coordination</li>
+    <li>Solution: Redis single-threaded = natural serialization</li>
+    <li>With batching: 100k writes/sec easily achievable</li>
+</ul>
+
+<p><strong>Database sharding (mention, don't elaborate):</strong></p>
+<ul>
+    <li>"At 3.5 trillion URLs we'd shard by short_code range"</li>
+    <li>"But 500GB easily fits on modern Postgres—no need yet"</li>
+</ul>
+
+<hr>
+
+<h3>Phase 5: Wrap-Up (1-2 mins)</h3>
+<p><strong>Proactively mention trade-offs:</strong></p>
+
+<p><strong>What we optimized for:</strong></p>
+<ul>
+    <li>Read performance (caching, indexing, 302 redirects)</li>
+    <li>Uniqueness guarantees (counter-based generation)</li>
+    <li>Simplicity (Postgres over distributed DB)</li>
+</ul>
+
+<p><strong>What we sacrificed:</strong></p>
+<ul>
+    <li>Counter is single point of failure → solved with Redis replication</li>
+    <li>302 means every click goes through our system → acceptable for analytics</li>
+    <li>No immediate consistency for distributed writes → fine for this use case</li>
+</ul>
+
+<p><strong>Areas we didn't cover (offer to discuss):</strong></p>
+<ul>
+    <li>Analytics pipeline</li>
+    <li>Abuse prevention (rate limiting, spam detection)</li>
+    <li>Custom domain support</li>
+</ul>
+`
+            },
+            {
+                shortcut: "C",
+                title: "Chat System (Slack)",
+                tags: ["websocket", "channels", "presence", "notifications"],
+                points: [
+                    "Real-time: WebSocket connections per user session",
+                    "Channels: Pub/Sub model with Redis or dedicated message broker",
+                    "Message Storage: Append-only log, partition by channel",
+                    "Presence: Heartbeat + distributed cache for online status",
+                    "Search: Elasticsearch for message history",
+                    "Notifications: Push via FCM/APNs for mobile",
+                    "File Sharing: CDN for attachments, pre-signed URLs"
+                ]
+            },
+            {
+                shortcut: "D",
+                title: "Dropbox - File Storage",
+                tags: ["storage", "sync", "chunking", "CDN"],
+                points: [
+                    "Chunking: Split files into 4MB blocks with content hashing",
+                    "Deduplication: Same content hash = same block (save 60% storage)",
+                    "Sync: Block-level sync, only upload changed chunks",
+                    "Metadata DB: MySQL/PostgreSQL for file hierarchy",
+                    "Block Storage: S3 or custom blob storage (Magic Pocket)",
+                    "Sync Protocol: Long polling or WebSocket for real-time",
+                    "Conflict Resolution: Last-write-wins or version branching"
+                ]
+            },
+            {
+                shortcut: "E",
+                title: "E-Commerce (Amazon)",
+                tags: ["catalog", "cart", "inventory", "checkout"],
+                points: [
+                    "Catalog Service: Product data with Elasticsearch search",
+                    "Inventory: Real-time stock with Redis, eventual consistency",
+                    "Cart: Session-based (Redis) or persistent (database)",
+                    "Checkout: Saga pattern for distributed transactions",
+                    "Recommendations: Collaborative filtering, ML models",
+                    "CDN: Product images, static assets globally distributed",
+                    "Payment: Idempotency keys, retry with backoff"
+                ]
+            },
+            {
+                shortcut: "F",
+                title: "Facebook News Feed",
+                tags: ["fanout", "ranking", "caching", "timeline"],
+                points: [
+                    "Push vs Pull: Fanout-on-write vs fanout-on-read",
+                    "Hybrid: Push for normal users, pull for celebrities",
+                    "Feed Storage: Redis sorted sets per user (post_id, timestamp)",
+                    "Ranking: ML model scores posts (engagement, recency, affinity)",
+                    "Graph DB: Neo4j or TAO for social connections",
+                    "Caching: User feed cached, invalidate on new post",
+                    "Pagination: Cursor-based (not offset) for consistency"
+                ]
+            },
+            {
+                shortcut: "G",
+                title: "Google Maps",
+                tags: ["geolocation", "routing", "tiles", "ETA"],
+                points: [
+                    "Map Tiles: Pre-rendered at zoom levels, served via CDN",
+                    "Routing: Dijkstra/A* on road graph, traffic-weighted edges",
+                    "Location: QuadTree or Geohash for spatial indexing",
+                    "ETA: Historical + real-time traffic data + ML",
+                    "Places: Search with autocomplete, nearby queries",
+                    "Offline: Download tiles and graph for region",
+                    "Scale: Partition by geographic region"
+                ]
+            },
+            {
+                shortcut: "H",
+                title: "Hotel Booking (Airbnb)",
+                tags: ["search", "booking", "availability", "pricing"],
+                points: [
+                    "Search: Elasticsearch with geo-filters, date availability",
+                    "Availability: Calendar service with date range queries",
+                    "Booking: Pessimistic locking during checkout flow",
+                    "Pricing: Dynamic pricing based on demand, seasonality",
+                    "Reviews: Eventually consistent, aggregate ratings cached",
+                    "Messaging: In-app chat between host and guest",
+                    "Payments: Escrow until check-in confirmed"
+                ]
+            },
+            {
+                shortcut: "I",
+                title: "Instagram",
+                tags: ["media", "feed", "stories", "CDN"],
+                points: [
+                    "Upload: Async processing, multiple resolutions",
+                    "Storage: S3 for images/videos, CDN for delivery",
+                    "Feed: Similar to Facebook, hybrid fanout",
+                    "Stories: TTL-based storage (24hr), separate pipeline",
+                    "Explore: ML-based content discovery, engagement signals",
+                    "Hashtags: Inverted index for tag-based queries",
+                    "Notifications: Real-time via push, batched for digest"
+                ]
+            },
+            {
+                shortcut: "J",
+                title: "Job Scheduler",
+                tags: ["distributed", "cron", "queuing", "reliability"],
+                points: [
+                    "Scheduling: Cron parser, next execution time calculation",
+                    "Storage: Persistent queue (MySQL, Redis) for jobs",
+                    "Execution: Worker pool with task distribution",
+                    "At-least-once: Acknowledgments, retry on failure",
+                    "Distributed Locks: Prevent duplicate execution",
+                    "Monitoring: Job status, execution history, alerts",
+                    "Examples: Celery, Sidekiq, AWS Step Functions"
+                ]
+            },
+            {
+                shortcut: "K",
+                title: "Key-Value Store (Redis)",
+                tags: ["caching", "data-structures", "persistence", "replication"],
+                points: [
+                    "In-memory: O(1) reads/writes, millions of ops/sec",
+                    "Data Structures: Strings, hashes, lists, sets, sorted sets",
+                    "Persistence: RDB snapshots, AOF append-only file",
+                    "Replication: Master-replica for read scaling",
+                    "Clustering: Hash slots, automatic sharding",
+                    "Pub/Sub: Real-time messaging between services",
+                    "TTL: Automatic expiration for cache entries"
+                ]
+            },
+            {
+                shortcut: "L",
+                title: "LeetCode - Online Judge",
+                tags: ["sandbox", "queue", "containers", "execution"],
+                points: [
+                    "Code Execution: Sandboxed containers (Docker/gVisor)",
+                    "Security: No network, limited CPU/memory, timeout",
+                    "Queue: Redis/RabbitMQ for submission processing",
+                    "Workers: Auto-scaling container pool for execution",
+                    "Test Cases: Stream large test cases, compare output",
+                    "Languages: Pre-built images per language runtime",
+                    "Plagiarism: Code similarity detection (AST comparison)"
+                ]
+            },
+            {
+                shortcut: "M",
+                title: "Metrics Monitoring & Alert",
+                tags: ["time-series", "alerting", "dashboards", "ingestion", "Prometheus", "Flink"],
+                points: [
+                    "Ingest: Agents on servers buffer & batch metrics → Kafka → Ingestion Consumer → Time-Series DB",
+                    "Scale: 5M metrics/sec from 500k servers, sub-second dashboard queries, alert latency <1 min",
+                    "Core Entities: Metric (name), Label (key-value), Series (metric+labels over time), Alert Rule, Dashboard",
+                    "Storage: Time-Series DB (InfluxDB/TimescaleDB) with time-partitioning, compression, retention tiers/rollups",
+                    "Alerting: Rules in Postgres → Evaluator polls TSDB every 1 min → emits events → Notification Service (dedup, grouping, silencing, escalation)",
+                    "Cardinality Control: Policy store (Postgres) + Redis cardinality tracker at ingestion to cap series per metric",
+                    "HA: Agents buffer locally on failure, Kafka replicates across zones, idempotent writes, alert state checkpointed"
+                ],
+                walkthrough: `
+<h3>Phase 1: Requirements (2-3 mins)</h3>
+
+<h4>Functional Requirements</h4>
+<ul>
+    <li>Services emit metrics to the platform</li>
+    <li>Query/visualize metrics on dashboards</li>
+    <li>Define alert rules with thresholds</li>
+    <li>Receive notifications when alerts fire</li>
+</ul>
+
+<h4>Non-Functional Requirements</h4>
+<ul>
+    <li>Scale: 5M metrics/sec, 500k servers</li>
+    <li>Dashboard queries return in seconds</li>
+    <li>Alert latency < 1 minute</li>
+    <li>High availability (eventual consistency ok)</li>
+    <li>Handle late/out-of-order data gracefully</li>
+</ul>
+
+<h4>Core Entities</h4>
+<ul>
+    <li><strong>Metric:</strong> Named measurement (e.g., <code>cpu_usage</code>)</li>
+    <li><strong>Label:</strong> Key-value pair for slicing (host="server-1", region="us-east")</li>
+    <li><strong>Series:</strong> Unique combination of metric + labels over time — the thing you store, query, and pay for</li>
+    <li><strong>Alert Rule:</strong> Query + threshold + duration → notification</li>
+    <li><strong>Dashboard:</strong> Collection of query panels → read amplifier</li>
+</ul>
+
+<h4>Data Flow (clarify early)</h4>
+<ol>
+    <li>Services generate metric data points (CPU, memory, latency, etc.) and send them to our platform</li>
+    <li>Platform ingests, validates, and stores metrics as time-series data</li>
+    <li>Users query stored metrics through dashboards, filtering and aggregating</li>
+    <li>Alert rules periodically evaluated against stored metrics</li>
+    <li>When alert condition is breached, notification sent to configured channels (Slack, etc.)</li>
+</ol>
+
+<hr>
+
+<h3>Phase 2: High-Level Design (5-6 mins)</h3>
+<p><strong>Flow:</strong> Agent → Ingest → Kafka → Consumers → TSDB → Query API → Dashboards</p>
+
+<h4>1. Getting Metrics from Services (Ingestion)</h4>
+<p>We don't want 500k servers hitting the ingestion service directly — we push the work to the edge.</p>
+<ul>
+    <li>Run a lightweight agent on each server that collects metrics locally at high frequency, buffers and batches them, then periodically flushes to the ingestion service — this reduces 5M req/s to ~50k (100 metrics per batch)</li>
+    <li>Agents also do local <strong>pre-aggregation</strong> (computing percentiles before shipping) which saves bandwidth and storage</li>
+    <li>After the agent: Ingestion Service → Kafka → Ingestion Consumer → Storage</li>
+    <li>Kafka helps buffer potential spikes and decouples ingestion from storage writes. If consumers fall behind, data sits safely in Kafka rather than getting dropped</li>
+</ul>
+
+<pre>Servers (500k, with Agents) → Ingestion Service → Kafka → Ingestion Consumer → Time-Series DB</pre>
+
+<h4>2. Querying & Dashboards</h4>
+<ul>
+    <li>Relational DB won't work at this scale — need a <strong>time-series database</strong> (InfluxDB, TimescaleDB, VictoriaMetrics) because the workload is append-only, time-partitioned, and compresses well columnar</li>
+    <li><strong>Dashboards are bursty, incident-driven reads:</strong> filter + group-by + aggregate over time ranges, often needing sub-second responses</li>
+    <li><strong>Store metrics in a time-series optimized backend</strong> with time-based partitioning, compression, and a label→series index</li>
+    <li><strong>Use retention tiers/rollups</strong> so long-range queries are cheap while recent data stays high-res</li>
+    <li>Front it with a <strong>query layer</strong> that adds caching + query limits (timeouts, max series, concurrency)</li>
+    <li><strong>Isolate/prioritize alerting reads</strong> so dashboard spikes don't break paging</li>
+</ul>
+
+<pre>Servers (with Agents) → Ingestion Service → Kafka → Ingestion Consumer → Time-Series DB (with rollups)
+                                                                              ↑ query
+                                                                         Query Service
+                                                                              ↑
+                                                                          Dashboard</pre>
+
+<h4>3. Alerting & Notification — Two Separate Systems</h4>
+<p><strong>Key design decision:</strong> Evaluation and notification are deliberately separate systems. Different scaling/reliability profiles.</p>
+
+<p><strong>i. Alert Evaluation:</strong></p>
+<ol>
+    <li>Alert rules stored in <strong>Postgres</strong> (simple CRUD, low volume)</li>
+    <li>Alert evaluator <strong>polls, not streams</strong> — runs every 1 minute, grabs all rules from Postgres, queries TSDB to evaluate each one</li>
+    <li><strong>Why polling?</strong> Simple, battle-tested — this is how Prometheus Alertmanager works</li>
+    <li>When a rule breaches → <strong>emit an event.</strong> Don't call Slack/PagerDuty directly</li>
+</ol>
+
+<p><strong>ii. Notification Service:</strong></p>
+<ol>
+    <li><strong>Deduplication:</strong> Track alert state (firing/resolved), only notify on state transitions. No repeat pages for the same ongoing incident</li>
+    <li><strong>Grouping:</strong> Collect alerts in a short window, group by label, send one notification per group</li>
+    <li><strong>Silencing:</strong> Mute during maintenance windows</li>
+    <li><strong>Escalation:</strong> Re-notify through a different channel if nobody acknowledges within configured time</li>
+</ol>
+
+<pre>Alert Service ↔ Alerts DB (Postgres)
+     ↓ (alert fires)
+Notification Service ↔ Noti DB
+     ↓
+Slack / SMS / Pager</pre>
+
+<hr>
+
+<h3>Phase 3: Deep Dives (6-8 mins)</h3>
+
+<h4>Deep Dive A: Real-Time Alerts (sub-minute)</h4>
+<p><strong>If polling every 1 minute isn't fast enough:</strong></p>
+<ul>
+    <li>Bring in <strong>Flink</strong> to stream directly from Kafka</li>
+    <li>Alert rules compile into Flink operators that continuously evaluate conditions</li>
+    <li>Threshold violation → Flink emits alert event immediately</li>
+    <li><strong>Trade-off:</strong> Flink adds operational complexity — rules must be translated into streaming operators</li>
+</ul>
+
+<h4>Deep Dive B: High Availability</h4>
+<p><strong>Approach:</strong> Keep the design simple, but make every step resumable</p>
+<p><strong>Ingestion path:</strong></p>
+<ol>
+    <li>Agents buffer locally and retry if network or ingestion layer is down</li>
+    <li>Kafka is replicated across zones so a broker loss doesn't drop data</li>
+    <li>Writes are idempotent so retries don't create duplicate points</li>
+</ol>
+<p><strong>Alerting + notification path:</strong></p>
+<ol>
+    <li>Alert evaluation state is checkpointed so a processor crash can resume</li>
+    <li>Alert events are written to Kafka before any external notifications</li>
+    <li>Alert Service retries delivery and can fail over to a secondary channel</li>
+</ol>
+
+<h4>Deep Dive C: Cardinality Explosion</h4>
+<p><strong>The problem:</strong> Each unique combo of metric + labels = a new series. A single metric like <code>http_requests</code> with 5 label dimensions across realistic infrastructure can produce 50M series. Hurts both writes (index/memory overhead per series) and reads (aggregating across millions of series is slow).</p>
+<p><strong>The solution — enforce at ingest with two components:</strong></p>
+<ol>
+    <li><strong>Policy store (Postgres):</strong> Defines per-metric rules — which labels are allowed, max series count, per-label value limits. E.g., <code>http_requests</code> capped at 500k series</li>
+    <li><strong>Cardinality tracker (Redis):</strong> Tracks unique series per metric in real-time using a set. New label combo comes in → check if it exists → if new, check against cap → reject if over limit</li>
+</ol>
+<p>Both sit in the ingestion service between validation and Kafka publish — so bad data never enters the pipeline.</p>
+`
+            },
+            {
+                shortcut: "N",
+                title: "Netflix - Video Streaming",
+                tags: ["CDN", "encoding", "adaptive-bitrate", "recommendations"],
+                points: [
+                    "Encoding: Multiple bitrates/resolutions per video (ABR)",
+                    "CDN: Open Connect, edge servers globally distributed",
+                    "Playback: Adaptive bitrate streaming (DASH/HLS)",
+                    "Recommendations: ML models, A/B testing framework",
+                    "Microservices: 1000+ services, Zuul gateway",
+                    "Resilience: Chaos engineering, circuit breakers",
+                    "Personalization: Thumbnails, rows customized per user"
+                ]
+            },
+            {
+                shortcut: "O",
+                title: "Object Storage (S3)",
+                tags: ["blob", "durability", "scalability", "metadata"],
+                points: [
+                    "Architecture: Flat namespace, bucket + key addressing",
+                    "Durability: 11 9s via replication across AZs",
+                    "Consistency: Strong read-after-write consistency",
+                    "Versioning: Keep multiple versions of objects",
+                    "Lifecycle: Transition to cheaper storage classes",
+                    "Access: Pre-signed URLs, bucket policies, ACLs",
+                    "Metadata: Custom headers, tagging for organization"
+                ]
+            },
+            {
+                shortcut: "P",
+                title: "Payment System (Stripe)",
+                tags: ["transactions", "idempotency", "PCI", "ledger"],
+                points: [
+                    "Idempotency: Idempotency keys prevent duplicate charges",
+                    "Ledger: Double-entry bookkeeping, immutable records",
+                    "PCI Compliance: Tokenization, never store raw card data",
+                    "Retry: Exponential backoff for failed charges",
+                    "Webhooks: Async notifications for payment events",
+                    "Fraud Detection: ML models, velocity checks",
+                    "Multi-currency: Real-time exchange rates, settlement"
+                ]
+            },
+            {
+                shortcut: "Q",
+                title: "Queue System (SQS)",
+                tags: ["async", "decoupling", "dead-letter", "visibility"],
+                points: [
+                    "Decoupling: Producer and consumer independent scaling",
+                    "Visibility Timeout: Message hidden while processing",
+                    "Dead Letter Queue: Failed messages after N retries",
+                    "FIFO: Exactly-once, ordered processing (with dedup)",
+                    "Long Polling: Reduce empty responses, lower cost",
+                    "Batch: Send/receive up to 10 messages at once",
+                    "Scaling: Auto-scale consumers based on queue depth"
+                ]
+            },
+            {
+                shortcut: "R",
+                title: "Rate Limiter",
+                tags: ["throttling", "algorithms", "distributed", "API"],
+                points: [
+                    "Token Bucket: Refill tokens at fixed rate, burst allowed",
+                    "Sliding Window: Count requests in rolling time window",
+                    "Fixed Window: Simple but has edge-case spikes",
+                    "Distributed: Redis for shared counter across instances",
+                    "Headers: Return X-RateLimit-Remaining, Retry-After",
+                    "Granularity: Per user, per IP, per API key",
+                    "Graceful: 429 status, queue requests if possible"
+                ]
+            },
+            {
+                shortcut: "S",
+                title: "Search Engine (Elasticsearch)",
+                tags: ["inverted-index", "sharding", "relevance", "aggregations"],
+                points: [
+                    "Inverted Index: word → list of document IDs",
+                    "Tokenization: Analyzers break text into terms",
+                    "Sharding: Horizontal partitioning for scale",
+                    "Replicas: Redundancy and read throughput",
+                    "Ranking: TF-IDF, BM25, custom scoring functions",
+                    "Aggregations: Faceted search, analytics on data",
+                    "Near Real-time: Index refresh interval (1 sec default)"
+                ]
+            },
+            {
+                shortcut: "T",
+                title: "Ticketmaster - Booking System",
+                tags: ["concurrency", "booking", "search", "caching", "Redis", "Elasticsearch"],
+                points: [
+                    "Functional: View events, search events, book tickets to events",
+                    "NFR: Availability for search/view, consistency for booking, 10M users per popular event, <500ms search, read-heavy 100:1",
+                    "Entities: Events, Users, Venues, Performers, Tickets (status: available/booked), Bookings",
+                    "Ticket Reservation: Distributed lock in Redis with TTL — hold ticket 10 min, auto-release if unpurchased",
+                    "Scaling Reads: Cache event details (high read, low update) with DB triggers for invalidation + TTL policy",
+                    "Search: Elasticsearch synced from Postgres via CDC for low-latency fuzzy search",
+                    "Architecture: API Gateway → Event Service / Search Service / Booking Service → PostgreSQL + Redis + Stripe"
+                ],
+                walkthrough: `
+<h3>Phase 1: Requirements (2-3 mins)</h3>
+
+<h4>Functional Requirements</h4>
+<ol>
+    <li>Users should be able to view events</li>
+    <li>Users should be able to search for events</li>
+    <li>Users should be able to book tickets to events</li>
+</ol>
+
+<h4>Non-Functional Requirements</h4>
+<ul>
+    <li>Prioritize <strong>availability</strong> for searching & viewing events, but <strong>consistency</strong> for booking events</li>
+    <li>Scalable for high throughput — popular events (10 million users, one event)</li>
+    <li>Low-latency search (<500ms)</li>
+    <li>Read-heavy — needs to support high read throughput (100:1)</li>
+</ul>
+
+<h4>Core Entities</h4>
+<ul>
+    <li>Events, Users, Venues, Performers, Tickets, Bookings</li>
+</ul>
+
+<h4>API / System Interface</h4>
+<pre>GET  /events/:eventId         → Event & Venue
+GET  /events/search?keyword=  → Partial&lt;Event&gt;[]
+POST /bookings/:eventId       → Booking</pre>
+
+<hr>
+
+<h3>Phase 2: High-Level Design (3-4 mins)</h3>
+<p><strong>Three core user flows:</strong></p>
+<ul>
+    <li>Users should be able to <strong>view</strong> events</li>
+    <li>Users should be able to <strong>search</strong> for events</li>
+    <li>Users should be able to <strong>book</strong> events</li>
+</ul>
+
+<pre>Client → API Gateway (auth, rate limiting, routing)
+              ↓
+    ┌─────────────────────────────────┐
+    │  view(eventId)                  │
+    │  → Event Service → PostgreSQL   │
+    │                                 │
+    │  search(term, location, type)   │
+    │  → Search Service → PostgreSQL  │
+    │                                 │
+    │  book(ticketId, userId)         │
+    │  → Booking Service → PostgreSQL │
+    │         ↓                       │
+    │       Stripe                    │
+    └─────────────────────────────────┘</pre>
+
+<p><strong>Database Schema (PostgreSQL):</strong></p>
+<ul>
+    <li><strong>Event:</strong> id, venueId, performerId, tickets[], name, description</li>
+    <li><strong>Venue:</strong> id, location, seatMap</li>
+    <li><strong>Performer:</strong> id, ...</li>
+    <li><strong>Ticket:</strong> id, eventId, seat, price, status (available/booked), userId</li>
+    <li><strong>Booking:</strong> id, userId, tickets</li>
+</ul>
+
+<hr>
+
+<h3>Phase 3: Deep Dives (6-8 mins)</h3>
+
+<h4>Deep Dive A: Ticket Reservation (Distributed Lock)</h4>
+<p><strong>How do we improve the booking experience by reserving tickets?</strong></p>
+<ul>
+    <li>Use a <strong>distributed lock with Redis + TTL</strong></li>
+    <li>When a user selects a ticket, acquire a lock in Redis using a unique identifier (ticket ID) with a predefined TTL (e.g., 10 min). This TTL acts as an automatic expiration time for the lock</li>
+    <li>User completes purchase → ticket status updated to "Booked" in the database, lock in Redis manually released before TTL expires</li>
+    <li>If TTL expires → Redis automatically releases the lock. Ticket becomes available for booking by other users</li>
+</ul>
+
+<h4>Deep Dive B: Scaling the View API (10s of millions of concurrent requests)</h4>
+
+<p><strong>Caching:</strong></p>
+<ul>
+    <li>Prioritize caching for data with high read rates and low update frequency — event details, performer bios, etc.</li>
+    <li><strong>Cache invalidation and consistency:</strong>
+        <ul>
+            <li>Set up database triggers to notify the caching system of data changes (e.g., updates in event dates or performer lineups) to invalidate relevant cache entries</li>
+            <li>Implement a TTL policy for cache entries, ensuring periodic refreshes</li>
+        </ul>
+    </li>
+</ul>
+
+<p><strong>Load Balancing:</strong></p>
+<ul>
+    <li>Round Robin or Least Connections for even traffic distribution across server instances</li>
+</ul>
+
+<p><strong>Horizontal Scaling:</strong></p>
+<ul>
+    <li>Event service is stateless — horizontally scale by adding more instances and load balancing between them</li>
+</ul>
+
+<h4>Deep Dive C: Low-Latency Search</h4>
+<p><strong>How can we improve search to meet our low-latency requirements?</strong></p>
+<ul>
+    <li>Use a full-text search engine like <strong>Elasticsearch</strong></li>
+    <li>Sync data from Postgres to Elasticsearch using <strong>CDC (Change Data Capture)</strong></li>
+    <li>Index on name, description, venue, performer, date, etc.</li>
+    <li>Enable fuzzy search functionality with Elasticsearch</li>
+</ul>
+
+<pre>Search query: GET /search?term={term}&location={location}&type={type}&date={date} → Partial&lt;Event&gt;[]
+
+Client → API Gateway → Search Service → Elasticsearch (indexed via CDC from PostgreSQL)
+                      → Event Service → Redis (event cache) → PostgreSQL
+                      → Booking Service → Ticket Lock (Redis, TTL 10 min) → PostgreSQL → Stripe
+                                ↑
+                        Virtual Waiting Queue</pre>
+`
+            },
+            {
+                shortcut: "U",
+                title: "Uber - Ride Sharing",
+                tags: ["geolocation", "matching", "ETA", "pricing"],
+                points: [
+                    "Location: Geohash or QuadTree for spatial indexing",
+                    "Matching: Score drivers by distance, rating, ETA",
+                    "Driver Tracking: Update location every 4 sec via WebSocket",
+                    "ETA: Graph algorithms (Dijkstra) + ML for traffic",
+                    "Surge Pricing: Supply/demand ratio per geohash cell",
+                    "Dispatch: Push notification to nearest available drivers",
+                    "Trip Storage: Append-only log, batch to data warehouse"
+                ]
+            },
+            {
+                shortcut: "V",
+                title: "Video Upload (YouTube)",
+                tags: ["encoding", "chunks", "CDN", "processing"],
+                points: [
+                    "Chunked Upload: Resumable uploads for large files",
+                    "Processing Pipeline: Transcode to multiple formats/resolutions",
+                    "Storage: Raw in S3, processed to CDN origins",
+                    "Thumbnail: Auto-generate or custom upload",
+                    "Metadata: Title, description, tags in relational DB",
+                    "Content Moderation: ML for policy violations",
+                    "Monetization: Ad insertion, revenue tracking"
+                ]
+            },
+            {
+                shortcut: "W",
+                title: "Web Crawler",
+                tags: ["distributed", "politeness", "deduplication", "frontier"],
+                points: [
+                    "Frontier: Priority queue of URLs to crawl (BFS/PageRank)",
+                    "Politeness: Respect robots.txt, rate limit per domain",
+                    "Deduplication: Bloom filter or MinHash for seen URLs",
+                    "Content Hashing: Detect duplicate pages (SimHash)",
+                    "DNS Cache: Local DNS resolver to reduce lookups",
+                    "Storage: Distributed file system for raw HTML",
+                    "Scale: 1B pages = partition by domain, horizontal scaling"
+                ]
+            },
+            {
+                shortcut: "X",
+                title: "X (Twitter) Timeline",
+                tags: ["fanout", "trends", "real-time", "caching"],
+                points: [
+                    "Fanout: Hybrid model like Facebook Feed",
+                    "Tweets: Append-only, sharded by user_id",
+                    "Trends: Streaming aggregation of hashtags (Flink/Storm)",
+                    "Search: Real-time indexing with Elasticsearch",
+                    "Caching: Home timeline cached, invalidate on new tweet",
+                    "Notifications: Real-time via WebSocket",
+                    "Rate Limiting: Per-user, per-app quotas"
+                ]
+            },
+            {
+                shortcut: "Y",
+                title: "Yelp - Local Search",
+                tags: ["geo-search", "reviews", "photos", "recommendations"],
+                points: [
+                    "Geo Search: Elasticsearch with geo_distance queries",
+                    "Business Data: Structured data + user-generated content",
+                    "Reviews: Write-heavy, read-heavy → CQRS pattern",
+                    "Photos: CDN delivery, moderation pipeline",
+                    "Search Ranking: Distance, rating, review count, category",
+                    "Recommendations: Collaborative filtering, location-based",
+                    "Mobile: Offline caching for recently viewed"
+                ]
+            },
+            {
+                shortcut: "Z",
+                title: "Zoom - Video Conferencing",
+                tags: ["WebRTC", "SFU", "encoding", "real-time"],
+                points: [
+                    "Protocol: WebRTC for peer connections, UDP for low latency",
+                    "Architecture: SFU (Selective Forwarding Unit) for multi-party",
+                    "Encoding: VP8/VP9/H.264, adaptive bitrate per participant",
+                    "Quality: Jitter buffer, FEC for packet loss recovery",
+                    "Scaling: Regional media servers, route to nearest",
+                    "Screen Share: Separate stream, higher resolution priority",
+                    "Recording: Server-side capture, async processing"
+                ]
+            },
+            {
+                shortcut: "A",
+                title: "Ad Click Aggregator",
+                tags: ["streaming", "aggregation", "OLAP", "Kafka", "Flink", "real-time"],
+                points: [
+                    "Collects & aggregates ad click data from multiple sources for real-time analytics",
+                    "Functional: Click tracking with 302 redirect, query click metrics at 1-min granularity",
+                    "Scale: 10M active ads, 10k clicks/sec peak, 100M clicks/day",
+                    "Data Flow: Browser → Click Processor → Kafka/Kinesis → Flink → OLAP DB",
+                    "302 Redirect: Click hits our server first to track, then redirects to advertiser",
+                    "Abuse Prevention: Signed impression IDs as idempotency keys, checked in cache",
+                    "Reconciliation: Raw events dumped to S3, Spark batch job validates stream results"
+                ],
+                walkthrough: `
+<h3>Phase 1: Requirements (2-3 mins)</h3>
+
+<h4>Functional Requirements</h4>
+<ul>
+    <li>Users click an ad → redirected to advertiser's website</li>
+    <li>Advertisers query ad click metrics over time (1-minute granularity minimum)</li>
+</ul>
+
+<h4>Non-Functional Requirements</h4>
+<ul>
+    <li>10M active ads, peak of 10k clicks/sec, ~100M clicks/day</li>
+    <li>Scalable to handle peak load</li>
+    <li>Low-latency analytics (sub-second response time)</li>
+    <li>Fault-tolerant with accurate data collection</li>
+    <li>Near real-time — data available ASAP for querying</li>
+</ul>
+
+<h4>Data Flow (clarify early)</h4>
+<ol>
+    <li>User clicks ad on a website</li>
+    <li>Click is tracked and stored</li>
+    <li>User is redirected to advertiser's website</li>
+    <li>Advertiser queries aggregated click metrics</li>
+</ol>
+
+<hr>
+
+<h3>Phase 2: High-Level Design (3-4 mins)</h3>
+<p><strong>Click path:</strong></p>
+<ul>
+    <li>User clicks ad placed by Ad Placement Service</li>
+    <li>Request goes to <code>/click</code> endpoint → Click Processor tracks it</li>
+    <li><strong>302 redirect</strong> sends user to advertiser site (not 301 — we need every click to hit our server for tracking)</li>
+</ul>
+
+<p><strong>Analytics path:</strong></p>
+<ul>
+    <li>Click Processor writes events to <strong>Kafka/Kinesis</strong></li>
+    <li><strong>Flink</strong> reads the stream and aggregates in real-time</li>
+    <li>Aggregated data stored in <strong>OLAP DB</strong> (columns: AdId, AdvertiserId as PK, Minute as SK, Click Count)</li>
+    <li>Advertisers query OLAP DB via Analytics Service for near-realtime metrics</li>
+</ul>
+
+<pre>Browser → LB & API Gateway → Click Processor → Kinesis → Flink → OLAP DB
+                ↓                                                    ↑
+         Ad Placement Service ↔ Ad DB                     Analytics Service → Analyst Browser</pre>
+
+<hr>
+
+<h3>Phase 3: Deep Dives (6-8 mins)</h3>
+
+<h4>Deep Dive A: Scaling to 10k clicks/sec</h4>
+<ul>
+    <li><strong>Click Processor:</strong> Scale horizontally with LB distributing load across instances</li>
+    <li><strong>Kafka/Kinesis:</strong> Already distributed — can handle massive throughput with proper config. Shard by AdId so Flink reads partitions in parallel (independent of each other)</li>
+    <li><strong>Flink:</strong> Scale horizontally by adding more tasks/jobs — separate jobs reading from each shard</li>
+    <li><strong>OLAP DB:</strong> Scale horizontally by adding nodes. Best shard key = <code>advertiserId</code> (advertisers query by their own data)</li>
+</ul>
+
+<h4>Deep Dive B: Hot Shards</h4>
+<p><strong>Problem:</strong> Popular ads create uneven partition load</p>
+<ul>
+    <li>Update partition key by appending a random number to AdId (e.g., <code>AdId:0-N</code>)</li>
+    <li>This distributes load across multiple shards while still grouping by ad</li>
+    <li>Downstream Flink jobs can further aggregate the sub-partitions</li>
+</ul>
+
+<h4>Deep Dive C: Preventing Data Loss</h4>
+<ol>
+    <li><strong>Kafka/Kinesis:</strong> Already distributed, fault-tolerant, highly available — replicates across multiple nodes and data centers</li>
+    <li><strong>7-day retention:</strong> If stream goes down, data can be replayed</li>
+    <li><strong>Flink checkpointing:</strong> Periodically writes processor state to S3 (more useful for large aggregation windows like day/week; our 1-min windows are small)</li>
+    <li><strong>Reconciliation:</strong> Dump raw click events to S3 data lake. Run Spark (MapReduce) batch job via cron to compare stream results with raw data — fix incorrect records if they don't match</li>
+</ol>
+
+<h4>Deep Dive D: Abuse Prevention (duplicate clicks)</h4>
+<ol>
+    <li>Ad Placement Service generates a unique <strong>impression ID</strong> for each ad shown to a user</li>
+    <li>Impression ID is <strong>signed with a secret key</strong> and sent to the browser with the ad</li>
+    <li>On click, browser sends the impression ID with click data</li>
+    <li>Click Processor checks if impression ID exists in <strong>cache</strong> — if found, it's a duplicate → ignore. If not, process and add to cache</li>
+</ol>
+
+<hr>
+
+<h3>Phase 4: Final Architecture</h3>
+<pre>Browser → LB & API Gateway → Click Processor → Kinesis → Flink → OLAP DB
+                ↓                    ↓                              ↑
+         Ad Placement Service    Cache (dedup)              Reconciliation Worker
+              ↕                     ↓                              ↑
+           Ad DB            Raw Click Data (S3) → Spark (MapReduce) via cron</pre>
+<p><strong>Key additions over basic design:</strong></p>
+<ul>
+    <li>Impression ID idempotency with cache for abuse prevention</li>
+    <li>Hot shard handling via partitioned AdId keys</li>
+    <li>7-day Kinesis retention for replay</li>
+    <li>Reconciliation pipeline (S3 + Spark) for data accuracy</li>
+</ul>
+`
+            }
+        ];
+
+        // =====================================================
+        // APP LOGIC - NO NEED TO EDIT BELOW
+        // =====================================================
+
+        const searchInput = document.getElementById('search');
+        const topicsList = document.getElementById('topicsList');
+        const indexView = document.getElementById('indexView');
+        const counter = document.getElementById('counter');
+
+        let currentMode = 'search';
+        let highlightedIndex = -1;
+        let visibleTopics = [];
+
+        // Load saved topics from localStorage
+        function loadTopics() {
+            const saved = localStorage.getItem('teleprompter-topics');
+            if (saved) {
+                try {
+                    topics = JSON.parse(saved);
+                } catch (e) {
+                    console.log('Using default topics');
+                }
+            }
+        }
+
+        // Save topics to localStorage
+        function saveTopics() {
+            localStorage.setItem('teleprompter-topics', JSON.stringify(topics));
+        }
+
+        // Render all topic cards
+        function renderTopics() {
+            topicsList.innerHTML = topics.map((topic, i) => `
+                <div class="topic-card" data-index="${i}" data-shortcut="${topic.shortcut || ''}">
+                    <div class="topic-title">
+                        ${topic.shortcut ? `<span class="shortcut-badge">${topic.shortcut}</span>` : ''}
+                        ${topic.title}
+                    </div>
+                    <div class="topic-tags">
+                        ${topic.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                    </div>
+                    ${topic.image ? `
+                        <div class="topic-diagram">
+                            <img src="${topic.image}" alt="${topic.title} Architecture" onclick="openDiagram('${topic.image}')">
+                        </div>
+                    ` : ''}
+                    <ul class="points-list">
+                        ${topic.points.map(point => `<li>${point}</li>`).join('')}
+                    </ul>
+                    ${topic.walkthrough ? `
+                        <div class="walkthrough-content">
+                            ${topic.walkthrough}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+
+            // Render index
+            indexView.innerHTML = topics.map((topic, i) => `
+                <div class="index-item" data-index="${i}">
+                    ${topic.shortcut ? `<span class="shortcut-key">${topic.shortcut}</span>` : ''}
+                    ${topic.title}
+                </div>
+            `).join('');
+
+            // Add click handlers to index items
+            document.querySelectorAll('.index-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const idx = parseInt(item.dataset.index);
+                    showSingleTopic(idx);
+                });
+            });
+
+            updateCounter();
+        }
+
+        // Open diagram in fullscreen
+        function openDiagram(imageSrc) {
+            const overlay = document.getElementById('diagramOverlay');
+            const overlayImg = document.getElementById('overlayImage');
+            overlayImg.src = imageSrc;
+            overlay.classList.add('visible');
+        }
+
+        // Close diagram overlay
+        function closeDiagram() {
+            document.getElementById('diagramOverlay').classList.remove('visible');
+        }
+
+        // Close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeDiagram();
+            }
+        });
+
+        // Filter topics based on search
+        function filterTopics(query) {
+            const cards = document.querySelectorAll('.topic-card');
+            visibleTopics = [];
+            highlightedIndex = -1;
+
+            if (!query.trim()) {
+                cards.forEach(card => card.classList.remove('visible', 'highlighted'));
+                updateCounter();
+                return;
+            }
+
+            const q = query.toLowerCase();
+
+            cards.forEach((card, i) => {
+                const topic = topics[i];
+                const searchText = [
+                    topic.title,
+                    ...topic.tags,
+                    ...topic.points
+                ].join(' ').toLowerCase();
+
+                if (searchText.includes(q)) {
+                    card.classList.add('visible');
+                    visibleTopics.push(i);
+                } else {
+                    card.classList.remove('visible');
+                }
+                card.classList.remove('highlighted');
+            });
+
+            // Highlight first match
+            if (visibleTopics.length > 0) {
+                highlightedIndex = 0;
+                document.querySelector(`[data-index="${visibleTopics[0]}"]`).classList.add('highlighted');
+            }
+
+            updateCounter();
+        }
+
+        // Show single topic (from shortcut or index click)
+        function showSingleTopic(idx) {
+            const cards = document.querySelectorAll('.topic-card');
+            cards.forEach(card => card.classList.remove('visible', 'highlighted'));
+
+            const targetCard = document.querySelector(`.topic-card[data-index="${idx}"]`);
+            targetCard.classList.add('visible', 'highlighted');
+            targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            visibleTopics = [idx];
+            highlightedIndex = 0;
+
+            // Clear search and blur so shortcuts keep working
+            searchInput.value = '';
+            searchInput.blur();
+
+            // Hide index view if visible
+            indexView.classList.remove('visible');
+
+            // Update mode buttons (select search mode visually)
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === 'search');
+            });
+            currentMode = 'search';
+
+            updateCounter();
+        }
+
+        // Update counter
+        function updateCounter() {
+            const visible = document.querySelectorAll('.topic-card.visible').length;
+            if (currentMode === 'all') {
+                counter.textContent = `${topics.length} topics`;
+            } else if (visible > 0) {
+                counter.textContent = `${visible} of ${topics.length} topics`;
+            } else if (searchInput.value) {
+                counter.textContent = `No matches found`;
+            } else {
+                counter.textContent = `${topics.length} topics ready • Start typing to search`;
+            }
+        }
+
+        // Set display mode
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+
+            const cards = document.querySelectorAll('.topic-card');
+
+            if (mode === 'all') {
+                indexView.classList.remove('visible');
+                cards.forEach(card => card.classList.add('visible'));
+            } else if (mode === 'index') {
+                indexView.classList.add('visible');
+                cards.forEach(card => card.classList.remove('visible'));
+            } else {
+                indexView.classList.remove('visible');
+                filterTopics(searchInput.value);
+            }
+
+            updateCounter();
+        }
+
+        // Navigate with arrow keys
+        function navigate(direction) {
+            if (visibleTopics.length === 0) return;
+
+            const cards = document.querySelectorAll('.topic-card');
+
+            // Remove current highlight
+            if (highlightedIndex >= 0) {
+                const currentIdx = visibleTopics[highlightedIndex];
+                cards[currentIdx].classList.remove('highlighted');
+            }
+
+            // Move to next/prev
+            highlightedIndex += direction;
+            if (highlightedIndex < 0) highlightedIndex = visibleTopics.length - 1;
+            if (highlightedIndex >= visibleTopics.length) highlightedIndex = 0;
+
+            // Add new highlight
+            const newIdx = visibleTopics[highlightedIndex];
+            const newCard = cards[newIdx];
+            newCard.classList.add('highlighted');
+            newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Open editor (simple JSON edit for now)
+        function openEditor() {
+            const json = JSON.stringify(topics, null, 2);
+            const newJson = prompt('Edit topics JSON (or paste new topics):', json);
+            if (newJson) {
+                try {
+                    topics = JSON.parse(newJson);
+                    saveTopics();
+                    renderTopics();
+                    alert('Topics updated!');
+                } catch (e) {
+                    alert('Invalid JSON format');
+                }
+            }
+        }
+
+        // Event Listeners
+        searchInput.addEventListener('input', (e) => {
+            if (currentMode !== 'search') setMode('search');
+            filterTopics(e.target.value);
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                navigate(1);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                navigate(-1);
+            } else if (e.key === 'Escape') {
+                searchInput.value = '';
+                filterTopics('');
+                setMode('search');
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                setMode(currentMode === 'all' ? 'search' : 'all');
+            }
+        });
+
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => setMode(btn.dataset.mode));
+        });
+
+        // Keyboard shortcuts for A-Z (when not typing in search)
+        document.addEventListener('keydown', (e) => {
+            // Only trigger if not focused on search input
+            if (document.activeElement === searchInput) return;
+
+            const key = e.key.toUpperCase();
+            if (key.length === 1 && key >= 'A' && key <= 'Z') {
+                const topicIndex = topics.findIndex(t => t.shortcut === key);
+                if (topicIndex !== -1) {
+                    e.preventDefault();
+                    showSingleTopic(topicIndex);
+                }
+            }
+        });
+
+        // Initialize
+        loadTopics();
+        renderTopics();
+        searchInput.focus();
+    </script>
+</body>
+
+</html>
