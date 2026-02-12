@@ -775,7 +775,131 @@ GET /{code} → 302 redirect</pre>
                     "Graph DB: Neo4j or TAO for social connections",
                     "Caching: User feed cached, invalidate on new post",
                     "Pagination: Cursor-based (not offset) for consistency"
-                ]
+                ],
+                walkthrough: `
+<h3>News Aggregator — System Design Walkthrough</h3>
+
+<h4>Functional Requirements</h4>
+<ul>
+    <li>Users view an <strong>aggregated feed</strong> of news articles from thousands of source publishers worldwide</li>
+    <li>Users can <strong>scroll infinitely</strong> through the feed</li>
+    <li>Users click articles → <strong>redirected to publisher's website</strong> for full content</li>
+</ul>
+
+<h4>Non-Functional Requirements</h4>
+<ul>
+    <li><strong>Availability over consistency</strong> (CAP theorem) — users prefer slightly outdated content over no content</li>
+    <li>Scalable to <strong>100M DAU</strong>, spikes up to 500M</li>
+    <li>Low latency feed load times: <strong>< 200ms</strong></li>
+</ul>
+
+<h4>Core Entities</h4>
+<ul>
+    <li><strong>Article:</strong> id, title, summary, thumbnailUrl, publishDate, url, publisherId, region, mediaUrls</li>
+    <li><strong>Publisher:</strong> id, name, url, rssFeedUrl, region, lastScraped</li>
+    <li><strong>User:</strong> id, region (inferred from IP or explicit)</li>
+</ul>
+
+<h4>API / System Interface</h4>
+<ul>
+    <li><code>GET /feed?page={page}&limit={limit}&region={region} → Article[]</code></li>
+    <li>Start with offset-based pagination → improve to <strong>cursor-based</strong> for scale + infinite scrolling</li>
+    <li>No endpoint for single article — browser redirects to publisher's <code>url</code> field</li>
+</ul>
+
+<h4>High-Level Design</h4>
+
+<h4>1. Data Collection (Ingestion)</h4>
+<ul>
+    <li><strong>Data Collection Service:</strong> polls publisher RSS feeds and APIs every 3-6 hours based on update frequency</li>
+    <li>Queries DB for publisher list + RSS URLs → fetches new articles → stores in DB</li>
+    <li><strong>Thumbnails:</strong> downloaded and stored in S3/Object Storage (don't rely on publisher servers — may be slow/down)</li>
+    <li>Standardize image quality/size for consistent UX</li>
+</ul>
+
+<h4>2. Feed Service (Serving)</h4>
+<ul>
+    <li><strong>Client</strong> → API Gateway → <strong>Feed Service</strong> → Database</li>
+    <li>Feed Service queries relevant articles based on user's <strong>region</strong> and formats response</li>
+    <li>API Gateway handles auth, rate limiting, request validation</li>
+</ul>
+
+<h4>Architecture Flow</h4>
+<pre>  [External Publishers] ←─ RSS ─→ [Data Collection Service] ──→ [Database]
+                                            │                       ↑
+                                            ↓                       │
+                                         [S3]                  [Feed Service]
+                                    (thumbnails)                    ↑
+                                                                    │
+                                                    [API Gateway] ←── [Client]</pre>
+
+<hr>
+
+<h3>Infinite Scrolling — How It Works</h3>
+<ul>
+    <li><strong>Initial load:</strong> Client sends <code>GET /feed?region=US&limit=20&page=1</code></li>
+    <li>Feed Service queries first 20 articles ordered by publish date</li>
+    <li>Response includes articles + pagination metadata (<code>total_pages</code>, <code>current_page</code>)</li>
+    <li><strong>As user scrolls:</strong> Client auto-sends next page request (<code>page=2</code>)</li>
+    <li>Feed Service calculates offset: <code>(page-1) * limit</code>, fetches next batch</li>
+    <li>DB query uses <code>OFFSET</code> and <code>LIMIT</code> clauses</li>
+</ul>
+
+<h3>Article Click → Redirect</h3>
+<ul>
+    <li>No backend needed — browser redirects to article's <code>url</code> field stored in DB</li>
+    <li>News aggregators <strong>don't host content</strong> — they point to the publisher's website</li>
+</ul>
+
+<hr>
+
+<h3>Deep Dives</h3>
+
+<h4>1. Cursor-Based Pagination (Replace Offset)</h4>
+<ul>
+    <li><strong>Problem:</strong> Offset-based pagination breaks when new articles are constantly published — user on page 2 sees duplicates or misses articles as content shifts</li>
+    <li>50-100 new articles/hour during peak → 10 min browsing = pagination drift guaranteed</li>
+    <li><strong>Solution: Monotonically increasing Article IDs</strong> (ULIDs or auto-increment)</li>
+    <li>Newer articles always have higher IDs → use article ID as cursor</li>
+    <li>Query: <code>WHERE article_id < cursor_id ORDER BY article_id DESC LIMIT 20</code></li>
+    <li>No composite cursors, no timestamp handling — just a single ID value</li>
+    <li>Simple index on <code>article_id</code> column — fast and simple</li>
+    <li><strong>Challenge:</strong> Requires planning ID strategy upfront; migrating from random UUIDs later is painful</li>
+    <li>For distributed systems: use ULID generation or centralized ID services to maintain ordering</li>
+</ul>
+
+<h4>2. Low Latency Feed (< 200ms)</h4>
+<ul>
+    <li><strong>Problem:</strong> Querying DB directly for every feed request won't scale — 100M DAU × 5-10 refreshes = 500M-1B requests/day</li>
+    <li>Querying millions of articles + filtering by region → response times well beyond 200ms</li>
+    <li><strong>Solution: Redis Read Cache</strong></li>
+    <li>Pre-compute regional feeds → store in Redis sorted sets</li>
+    <li>Feed Service checks cache first → DB fallback only on cache miss</li>
+    <li><strong>Cache invalidation:</strong> When Data Collection Service ingests new articles → update regional cache</li>
+    <li>Redis latency: <strong>sub-millisecond</strong> vs DB: 10-50ms+</li>
+</ul>
+
+<h4>3. Media Content — Thumbnails at Scale</h4>
+<ul>
+    <li><strong>Problem:</strong> 100M+ users viewing feeds — thumbnail delivery must be fast and cost-effective</li>
+    <li>Publisher images may be slow, change URLs, or go down — need our own copies</li>
+    <li><strong>Bad:</strong> Database blob storage (expensive, slow, doesn't scale)</li>
+    <li><strong>Good:</strong> S3 with direct links (scalable but no global edge caching)</li>
+    <li><strong>Best: S3 + CloudFront CDN with multiple sizes</strong></li>
+    <li>Generate multiple thumbnail sizes: <strong>150×100</strong> (mobile), <strong>300×200</strong> (desktop), <strong>600×400</strong> (retina)</li>
+    <li>Use HTML <code>srcset</code> or client-side logic to request appropriate version</li>
+    <li>CloudFront serves from 400+ edge locations → sub-10ms globally</li>
+</ul>
+
+<h4>Final Architecture Flow</h4>
+<pre>  [Client] → [API Gateway] → [Feed Service] → [Redis Cache] → [Database]
+       ↓              ↓                                              ↑
+   [CDN] ←── [S3]    [Webhook Service]              [Data Collection Services]
+  (thumbnails)                                     (High/Med/Low Priority)
+                                                           ↓
+                                                   [External Publishers]
+                                                   (RSS Feed / Web Scraper)</pre>
+`
             },
             {
                 shortcut: "G",
@@ -1880,17 +2004,135 @@ POST /bookings/:eventId       → Booking</pre>
             },
             {
                 shortcut: "Y",
-                title: "Yelp - Local Search",
-                tags: ["geo-search", "reviews", "photos", "recommendations"],
+                title: "Dropbox — File Storage",
+                tags: ["file-storage", "sync", "chunking", "S3", "sharing", "upload"],
                 points: [
-                    "Geo Search: Elasticsearch with geo_distance queries",
-                    "Business Data: Structured data + user-generated content",
-                    "Reviews: Write-heavy, read-heavy → CQRS pattern",
-                    "Photos: CDN delivery, moderation pipeline",
-                    "Search Ranking: Distance, rating, review count, category",
-                    "Recommendations: Collaborative filtering, location-based",
-                    "Mobile: Offline caching for recently viewed"
-                ]
+                    "Upload/Download: Files from any device, up to 50GB",
+                    "Sharing: Share files with other users, view shared files",
+                    "Sync: Auto-sync files across devices",
+                    "Chunking: Split large files into chunks for parallel upload",
+                    "Storage: S3 for file data, DB for metadata",
+                    "Availability over consistency (CAP)",
+                    "Security: Encryption at rest + in transit, file recovery"
+                ],
+                walkthrough: `
+<h3>Dropbox — System Design Walkthrough</h3>
+
+<h4>Functional Requirements</h4>
+<ul>
+    <li>Users can <strong>upload a file</strong> from any device</li>
+    <li>Users can <strong>download a file</strong> from any device</li>
+    <li>Users can <strong>share a file</strong> with other users and view files shared with them</li>
+    <li>Users can <strong>automatically sync files</strong> across devices</li>
+</ul>
+
+<h4>Non-Functional Requirements</h4>
+<ul>
+    <li><strong>Highly available</strong> (prioritize availability over consistency)</li>
+    <li>Support files as large as <strong>50GB</strong></li>
+    <li><strong>Secure and reliable</strong> — recover files if lost or corrupted</li>
+    <li><strong>Low latency</strong> upload, download, and sync times</li>
+</ul>
+
+<h4>Core Entities</h4>
+<ul>
+    <li><strong>File:</strong> The raw data users upload, download, and share</li>
+    <li><strong>FileMetadata:</strong> Name, size, mime type, uploading user — stored separately from the file itself</li>
+    <li><strong>User:</strong> The system user</li>
+</ul>
+
+<h4>API / System Interface</h4>
+<ul>
+    <li><strong>Upload:</strong> <code>POST /files</code> — Request body: { File, FileMetadata }</li>
+    <li><strong>Download:</strong> <code>GET /files/{fileId}</code> → File & FileMetadata</li>
+    <li>Define endpoints early — they guide the high-level design</li>
+</ul>
+
+<hr>
+
+<h3>High-Level Design</h3>
+
+<h4>1. Upload — File from Any Device</h4>
+<ul>
+    <li>Two things to store: <strong>file contents</strong> (raw bytes) and <strong>file metadata</strong></li>
+    <li><strong>Metadata DB:</strong> DynamoDB (NoSQL) — loosely structured, main query pattern is fetch files by user. PostgreSQL also works fine.</li>
+    <li><strong>File Storage:</strong> S3 (Blob Storage) — don't store raw files in the DB</li>
+</ul>
+
+<p><strong>Best Approach: Upload Directly to Blob Storage via Presigned URLs</strong></p>
+<ul>
+    <li>Faster and cheaper than routing files through your backend</li>
+    <li><strong>Presigned URLs</strong> = time-limited URLs giving permission to upload to a specific S3 location</li>
+    <li>Three-step upload process:</li>
+</ul>
+<ol>
+    <li>Client requests presigned URL from backend: <code>POST /files/presigned-url → PresignedUrl</code> (sends FileMetadata, backend saves metadata with status "uploading")</li>
+    <li>Client uploads file directly to S3 via <strong>PUT request</strong> to presigned URL</li>
+    <li>S3 sends <strong>S3 Notification</strong> to backend → updates metadata status to "uploaded"</li>
+</ol>
+
+<h4>Upload Architecture</h4>
+<pre>
+  ┌──────────┐   POST /files/       ┌─────────────────┐        ┌─────────────┐
+  │          │   presigned-url      │  API Gateway /   │        │             │
+  │ Uploader │ ───────────────────→ │  Load Balancer   │ ─────→ │ File Service│
+  │          │                      │  - routing       │        │ (generates  │
+  └────┬─────┘                      │  - auth          │        │  presigned  │
+       │                            │  - rate limiting │        │  URL)       │
+       │                            └─────────────────┘        └──────┬──────┘
+       │                                                              │
+       │  Upload file directly                                        │ save metadata
+       │  via presigned URL                                           │ status: "uploading"
+       │                                                              ↓
+       │                            ┌──────────┐              ┌──────────────┐
+       └──────────────────────────→ │    S3    │              │ File Metadata│
+                                    │  (Blob   │ ── S3 ────→ │     DB       │
+                                    │ Storage) │  Notif.     │ status →     │
+                                    └──────────┘              │  "uploaded"  │
+                                                              └──────────────┘
+</pre>
+
+<hr>
+
+<h4>2. Download — File from Any Device</h4>
+<ul>
+    <li><strong>Bad:</strong> Download through File Server (backend bottleneck)</li>
+    <li><strong>Good:</strong> Download from Blob Storage (S3 direct)</li>
+    <li><strong>Best: Download from CDN</strong></li>
+</ul>
+
+<p><strong>CDN Approach:</strong></p>
+<ul>
+    <li>CDN caches files at 400+ edge locations globally → serves from server closest to user</li>
+    <li>Much faster than serving from backend or S3 directly</li>
+    <li><strong>Security:</strong> Generate presigned CDN URLs (time-limited download permission), same pattern as upload</li>
+    <li><strong>Challenge:</strong> CDN is expensive — use <strong>cache control headers</strong> to control what gets cached and for how long</li>
+    <li>Use <strong>cache invalidation</strong> to remove files from CDN when updated or deleted</li>
+    <li>Only frequently accessed files stay cached → don't waste money on rarely accessed files</li>
+</ul>
+
+<h4>Download Architecture</h4>
+<pre>
+  ┌────────────┐  GET /files/{id}   ┌─────────────────┐        ┌─────────────┐
+  │            │                    │  API Gateway /   │        │             │
+  │ Downloader │ ─────────────────→ │  Load Balancer   │ ─────→ │ File Service│
+  │            │                    └─────────────────┘        └──────┬──────┘
+  └─────┬──────┘                                                      │
+        │                                                             │ lookup metadata
+        │  Download file                                              ↓
+        │  via presigned                                       ┌──────────────┐
+        │  CDN URL                                             │ File Metadata│
+        │                                                      │     DB       │
+        │                                                      └──────┬───────┘
+        │                                                             │
+        │               ┌──────────┐         ┌──────────┐             │ return
+        │               │          │  cache  │          │             │ presigned
+        └─────────────← │   CDN    │ ←────── │    S3    │             │ CDN URL
+                        │ (edge    │  miss   │  (Blob   │             │
+                        │ servers) │ fetch   │ Storage) │  ←──────────┘
+                        └──────────┘         └──────────┘
+</pre>
+`
             },
             {
                 shortcut: "Z",
