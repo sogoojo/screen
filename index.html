@@ -502,9 +502,21 @@ GET /{code} → 302 redirect</pre>
 
 <h3>Phase 3: High-Level Architecture (2-3 mins)</h3>
 <p><strong>Draw the flow:</strong></p>
-<pre>Client → Load Balancer → [Write Service | Read Service] → Database
-                    ↓                        ↓
-             Global Counter           Cache (Redis)</pre>
+<pre>                        Client
+                          ↓
+                    Load Balancer
+                     ↓          ↓
+              ┌────────────┐ ┌────────────┐
+              │   Write    │ │    Read    │
+              │  Service   │ │  Service   │
+              └─────┬──────┘ └──┬─────┬───┘
+                    ↓           ↓     ↓
+             Global Counter   Cache  Database
+             (ID generation) (Redis) (Postgres)
+                    ↓                  ↑
+                Database ──────────────┘
+
+  POST /shorten → Write path       GET /:shortCode → Read path</pre>
 
 <p><strong>Key callouts (30 secs each):</strong></p>
 <ol>
@@ -627,17 +639,115 @@ GET /{code} → 302 redirect</pre>
             },
             {
                 shortcut: "D",
-                title: "Dropbox - File Storage",
-                tags: ["storage", "sync", "chunking", "CDN"],
+                title: "DRIFT Infra — Event Streaming Platform",
+                tags: ["Kafka", "Flink", "streaming", "platform", "self-service", "reliability"],
                 points: [
-                    "Chunking: Split files into 4MB blocks with content hashing",
-                    "Deduplication: Same content hash = same block (save 60% storage)",
-                    "Sync: Block-level sync, only upload changed chunks",
-                    "Metadata DB: MySQL/PostgreSQL for file hierarchy",
-                    "Block Storage: S3 or custom blob storage (Magic Pocket)",
-                    "Sync Protocol: Long polling or WebSocket for real-time",
-                    "Conflict Resolution: Last-write-wins or version branching"
-                ]
+                    "Context: Own Kafka + Flink event platform — ~2B events/day, 300+ producers",
+                    "Powers tech ref data, regulatory reporting, risk calculations + ops telemetry",
+                    "Segmented clusters so telemetry can't impact business streams",
+                    "Problem: Bespoke onboarding (~150 producers) → platform team bottleneck, over-provisioned cost",
+                    "Actions: Producer experience first (SDK/portal, Avro contracts, DLQ), then efficiency (Flink autoscaling, tiered storage)",
+                    "Results: 1B→2B/day, producers 150→300+, cost -30%, 99.9%+ reliability for 18+ months",
+                    "Learning: Scale from removing humans as bottlenecks; sequence leverage first, then optimize cost"
+                ],
+                walkthrough: `
+<h3>DRIFT Infra</h3>
+
+<h4>Context</h4>
+<ul>
+    <li>Own Kafka + Flink event platform: <strong>~2B events/day, 300+ producers</strong></li>
+    <li>Powers tech ref data, regulatory reporting, risk calculations + ops telemetry
+        <ul>
+            <li>Container metrics + vulnerabilities — CVM, VTM</li>
+            <li>Incidents, change records</li>
+            <li>100's of different related categories</li>
+        </ul>
+    </li>
+    <li><strong>Segmented clusters</strong> so telemetry can't impact business streams</li>
+    <li>If it lags/fails → <strong>EOD + compliance cascades</strong></li>
+</ul>
+
+<h4>Starting Problems + Mandate</h4>
+<ul>
+    <li><strong>Bespoke onboarding</strong> (~150 producers) → platform team bottleneck</li>
+    <li><strong>Over-provisioned cost</strong></li>
+    <li>Mandate: <strong>self-service scale, reduce cost, +reliability, headcount flat</strong></li>
+</ul>
+
+<h4>Actions (Sequenced) → Organizational Architecture, Not Just Technical</h4>
+
+<h4>1. Producer Experience First</h4>
+<ul>
+    <li><strong>Standard contracts:</strong> Avro + registry; <strong>edge validation + DLQ/quarantine</strong></li>
+    <li><strong>Golden path onboarding:</strong> SDK/portal + <strong>prod readiness gates</strong></li>
+    <li><strong>Adoption:</strong> pilot with Risk + Ops, workshops, <strong>6-month deprecation</strong> w/ BU exec alignment</li>
+</ul>
+
+<h4>2. Efficiency Second</h4>
+<ul>
+    <li><strong>Flink autoscaling</strong>, compression, <strong>tiered storage</strong></li>
+    <li>Managed tradeoff: tier latency → <strong>caching + tiered SLAs</strong></li>
+</ul>
+
+<h4>Results</h4>
+<ul>
+    <li>Throughput: <strong>1B → 2B/day</strong> (no infra add)</li>
+    <li>Producers: <strong>150 → 300+</strong>, onboarding <strong>weeks → hours</strong></li>
+    <li>Cost: <strong>-30%</strong>; savings funded resilience work</li>
+    <li>Headcount: <strong>flat</strong>; team shifted from toil → platform engineering</li>
+    <li>Reliability: <strong>99.9%+ for 18+ months</strong></li>
+</ul>
+
+<h4>Key Learnings</h4>
+<ul>
+    <li>Scale comes from <strong>removing humans as bottlenecks</strong></li>
+    <li>Resistance was <strong>cultural</strong> → pilots + exec-backed deprecation beat mandates</li>
+    <li><strong>Sequence leverage first</strong>, then optimize cost/perf</li>
+</ul>
+
+<hr>
+
+<h4>Tooling Reference (For Recall)</h4>
+<table>
+    <tr><th>Tool</th><th>What It Is</th><th>Main Use / Function</th></tr>
+    <tr><td><strong>dbt</strong> (data build tool)</td><td>Data transformation framework</td><td>Transforms and models data <em>inside the data warehouse</em> using SQL</td></tr>
+    <tr><td><strong>Fivetran</strong></td><td>Managed data ingestion (EL) platform</td><td>Automatically extracts data from APIs & databases and loads into a data warehouse</td></tr>
+    <tr><td><strong>Airbyte</strong></td><td>Open-source data ingestion (EL/ELT) platform</td><td>Moves data from sources to destinations like Fivetran does</td></tr>
+    <tr><td><strong>Dagster</strong></td><td>Modern data orchestration framework</td><td>Defines, schedules, and monitors data pipelines in Python</td></tr>
+    <tr><td><strong>Apache Airflow</strong></td><td>Workflow orchestration platform</td><td>Schedules and manages complex data workflows (ETL, scripts, dbt jobs)</td></tr>
+</table>
+
+<hr>
+
+<h4>Sketch If Asked</h4>
+<pre>[Producers (300+)]
+        ↓
+[API Gateway] ← (on-prem systems connect here)
+        ↓
+[Schema Registry] → validation
+        ↓
+[Kafka/MSK]
+        ↓
+    ┌───┴───┐
+    ↓       ↓
+[Flink]  [Real-time Consumers]
+    ↓
+    ├──→ [S3 — Raw/Parquet]
+    ├──→ [Snowflake — Analytics]
+    └──→ [Operational DBs]</pre>
+
+<hr>
+
+<h4>If They Probe Deeper</h4>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:30%;">Probe</th><th style="border:1px solid #555; padding:8px; text-align:left;">Your Answer</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;">"How do you handle hot partitions?"</td><td style="border:1px solid #555; padding:8px;">"Partition by producer ID typically. For high-volume producers, we spread across multiple partitions. Flink aggregates regardless of partition distribution."</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;">"What if Kafka goes down?"</td><td style="border:1px solid #555; padding:8px;">"Multi-AZ, RF-3. Survive AZ failure with no data loss. Producers buffer locally and retry — SDKs have backoff built in."</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;">"How do you handle schema evolution?"</td><td style="border:1px solid #555; padding:8px;">"Glue Schema Registry enforces backward compatibility. Breaking changes rejected at registration. Teams can add fields, not remove or change types."</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;">"What about exactly-once?"</td><td style="border:1px solid #555; padding:8px;">"Kafka supports idempotent producers. Flink checkpoints offsets with state. For critical paths, we verify with batch reconciliation."</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;">"How do consumers handle backpressure?"</td><td style="border:1px solid #555; padding:8px;">"Consumer lag monitoring. If a consumer falls behind, we alert. It's their capacity problem — platform provides the durability."</td></tr>
+</table>
+`
             },
             {
                 shortcut: "E",
@@ -669,17 +779,73 @@ GET /{code} → 302 redirect</pre>
             },
             {
                 shortcut: "G",
-                title: "Google Maps",
-                tags: ["geolocation", "routing", "tiles", "ETA"],
+                title: "Golden Path — Platform Governance",
+                tags: ["platform", "Terraform", "OPA", "self-service", "governance", "security"],
                 points: [
-                    "Map Tiles: Pre-rendered at zoom levels, served via CDN",
-                    "Routing: Dijkstra/A* on road graph, traffic-weighted edges",
-                    "Location: QuadTree or Geohash for spatial indexing",
-                    "ETA: Historical + real-time traffic data + ML",
-                    "Places: Search with autocomplete, nearby queries",
-                    "Offline: Download tiles and graph for region",
-                    "Scale: Partition by geographic region"
-                ]
+                    "Context: Took over infra + platform teams — devs blocked by tickets for IAM, networking, pipeline setup",
+                    "Problem: Security gate-keeping standard requests, days/weeks in approval queues — system issue, not tooling",
+                    "Action: Pitched shared win (Security + Engineering + Leadership), built Terraform + OPA policy-as-code",
+                    "Structured: Core Platform team + Developer Experience team, partnered with CISO",
+                    "Result: 75% adoption in 4 months, same-day deploys, 60% drop in IAM/network misconfigs, 40% scale increase",
+                    "Learning: Automate governance, align incentives, discipline in keeping starting point simple"
+                ],
+                walkthrough: `
+<h3>Golden Path</h3>
+
+<h4>Context</h4>
+<ul>
+    <li>Took over the infra and platform teams</li>
+    <li>Inherited a standoff: devs blocked by tickets</li>
+    <li>Every new service takes days sometimes weeks in approval queues
+        <ul>
+            <li>IAM Roles</li>
+            <li>Networking configs</li>
+            <li>Pipeline setup</li>
+        </ul>
+    </li>
+    <li>Security was gate keeping and manually reviewing standard requests</li>
+    <li>Developers were frustrated</li>
+    <li>I saw a system issue not a tooling problem</li>
+    <li>The process was clearly broken</li>
+</ul>
+
+<h4>Action</h4>
+<ul>
+    <li>Buy in first — pitched shared win to Security + Engineering + Leadership</li>
+    <li>Security gets automated enforcement they can trust</li>
+    <li>Engineering gets self service speed with no ticket queues</li>
+    <li>Structured work across two managers:
+        <ul>
+            <li>Core Platform team</li>
+            <li>Developer Experience team</li>
+        </ul>
+    </li>
+    <li>Partnered directly with security architecture (CISO)</li>
+    <li>Two capabilities:
+        <ul>
+            <li>Standardized provisioning: (Terraform) → 80% of common workloads</li>
+            <li>Policy-as-code (OPA) — Security checks in pipeline, enforced before merge</li>
+        </ul>
+    </li>
+    <li>Deliberately scoped to the 80% and pushed back on edge cases</li>
+    <li>I ensured alignment and stayed opinionated</li>
+</ul>
+
+<h4>Result</h4>
+<ul>
+    <li><strong>75% adoption</strong> in four months post implementation without mandates — everyone loved it</li>
+    <li>Weeks → <strong>same-day</strong> time to first production deploy</li>
+    <li><strong>60% drop</strong> in IAM & Network misconfigurations (no longer subjective — declarative policy based guard rail)</li>
+    <li>Platform scale increased by <strong>40%</strong> without adding headcount</li>
+</ul>
+
+<h4>Learning</h4>
+<ul>
+    <li>Governance and provisioning needs to be as automated as possible</li>
+    <li>Once incentives align, the technical work is straightforward</li>
+    <li>Discipline in keeping starting point simple</li>
+</ul>
+`
             },
             {
                 shortcut: "H",
@@ -697,17 +863,170 @@ GET /{code} → 302 redirect</pre>
             },
             {
                 shortcut: "I",
-                title: "Instagram",
-                tags: ["media", "feed", "stories", "CDN"],
+                title: "Intro — Self Introduction",
+                tags: ["intro", "Citi", "Mastercard", "platform", "leadership"],
                 points: [
-                    "Upload: Async processing, multiple resolutions",
-                    "Storage: S3 for images/videos, CDN for delivery",
-                    "Feed: Similar to Facebook, hybrid fanout",
-                    "Stories: TTL-based storage (24hr), separate pipeline",
-                    "Explore: ML-based content discovery, engagement signals",
-                    "Hashtags: Inverted index for tag-based queries",
-                    "Notifications: Real-time via push, batched for digest"
-                ]
+                    "I'm Sogo — Senior Engineering Manager at Citi",
+                    "25-person team: 3 managers + 2 architects, CTS organisation",
+                    "My team runs platform infrastructure powering our data platform",
+                    "Also help with cloud migrations",
+                    "Before Citi: Blockchain infrastructure at Mastercard — L2 rollup migration"
+                ],
+                walkthrough: `
+<h3>Introduction</h3>
+<ul>
+    <li>I'm <strong>Sogo</strong> — Senior Engineering Manager at Citi</li>
+    <li><strong>25-person team:</strong> 3 managers + 2 architects, CTS organisation</li>
+    <li>My team runs <strong>platform infrastructure</strong> powering our data platform</li>
+    <li>Also help with <strong>cloud migrations</strong></li>
+    <li>Before Citi: <strong>Blockchain infrastructure at Mastercard</strong> — L2 rollup migration</li>
+</ul>
+
+<hr>
+
+<h4>High-Performing Teams — Project Aristotle Summary</h4>
+<p><strong>The Five Factors (In Order of Impact)</strong></p>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:30%;">Factor</th><th style="border:1px solid #555; padding:8px; text-align:left;">What It Means</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>1. Psychological Safety</strong></td><td style="border:1px solid #555; padding:8px;">Safe to take risks, ask questions, admit mistakes — without fear</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>2. Dependability</strong></td><td style="border:1px solid #555; padding:8px;">People deliver what they commit to</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>3. Structure & Clarity</strong></td><td style="border:1px solid #555; padding:8px;">Clear roles, goals, expectations</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>4. Meaning</strong></td><td style="border:1px solid #555; padding:8px;">The work matters personally</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>5. Impact</strong></td><td style="border:1px solid #555; padding:8px;">The team believes their work makes a difference</td></tr>
+</table>
+
+<hr>
+
+<h4>Question 1: Leading a Team with Juniors and Non-Coders in SRE</h4>
+
+<p><strong>Director-Level Answer</strong></p>
+<blockquote>
+"First, I'd understand what each person brings. Non-coders in SRE often have deep operational knowledge — they know the systems, the failure modes, the tribal knowledge. That's valuable. Juniors bring energy and fresh perspective. My job is building a team where different strengths complement each other."
+</blockquote>
+
+<p><strong>Three Things I'd Focus On</strong></p>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:25%;">Focus</th><th style="border:1px solid #555; padding:8px; text-align:left;">How</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Pair expertise</strong></td><td style="border:1px solid #555; padding:8px;">Non-coders partner with coders on automation projects — domain knowledge meets implementation skill</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Create learning paths</strong></td><td style="border:1px solid #555; padding:8px;">Juniors get mentorship and stretch assignments. Non-coders get supported path to scripting/automation if they want it — but it's optional, not forced</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Value all contributions</strong></td><td style="border:1px solid #555; padding:8px;">Runbooks, incident response, stakeholder communication — not everything is code. Recognize operational excellence, not just commits</td></tr>
+</table>
+
+<hr>
+
+<h4>Question 2: What is Quality Software?</h4>
+
+<p><strong>Director-Level Answer</strong></p>
+<blockquote>
+"Quality software does what it's supposed to do, reliably, and is easy to change when requirements evolve."
+</blockquote>
+
+<p><strong>Three Dimensions</strong></p>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:25%;">Dimension</th><th style="border:1px solid #555; padding:8px; text-align:left;">What It Means</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Correctness</strong></td><td style="border:1px solid #555; padding:8px;">Does what users expect — meets functional requirements</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Reliability</strong></td><td style="border:1px solid #555; padding:8px;">Works consistently — handles failures gracefully, doesn't surprise you at 2am</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Maintainability</strong></td><td style="border:1px solid #555; padding:8px;">Easy to understand, test, and change — future developers can work with it</td></tr>
+</table>
+
+<p><strong>What I'd Add for SRE Context</strong></p>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:25%;">Quality</th><th style="border:1px solid #555; padding:8px; text-align:left;">Why It Matters</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Observable</strong></td><td style="border:1px solid #555; padding:8px;">You can see what it's doing — logs, metrics, traces. No black boxes.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Operable</strong></td><td style="border:1px solid #555; padding:8px;">Easy to deploy, rollback, scale. Doesn't require heroics to run.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Resilient</strong></td><td style="border:1px solid #555; padding:8px;">Fails gracefully. Degrades, doesn't collapse.</td></tr>
+</table>
+
+<hr>
+
+<h2>AWS Infrastructure Knowledge Reference</h2>
+<p><em>What a hands-on Director of Infrastructure must know cold</em></p>
+
+<h3>Regions, Availability Zones & Edge</h3>
+<p>Understanding the physical topology of AWS is foundational. Every architecture decision — latency, redundancy, compliance, cost — traces back to how you use regions and AZs.</p>
+
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:15%;">Concept</th><th style="border:1px solid #555; padding:8px; text-align:left; width:25%;">What It Is</th><th style="border:1px solid #555; padding:8px; text-align:left; width:30%;">Key Numbers</th><th style="border:1px solid #555; padding:8px; text-align:left;">Interview Relevance</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Region</strong></td><td style="border:1px solid #555; padding:8px;">Geographically isolated cluster of data centers (e.g., eu-west-1 Dublin). Each region is fully independent.</td><td style="border:1px solid #555; padding:8px;">30+ regions globally. Inter-region latency: 50-200ms depending on distance.</td><td style="border:1px solid #555; padding:8px;">Choose region for: data residency/compliance, proximity to users, service availability, cost differences.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Availability Zone (AZ)</strong></td><td style="border:1px solid #555; padding:8px;">One or more discrete data centers within a region, with independent power, cooling, networking. Connected via low-latency private fiber.</td><td style="border:1px solid #555; padding:8px;">Typically 3 AZs per region (some have 6). Intra-AZ latency: < 1ms. Cross-AZ latency: 1-2ms. Cross-AZ data transfer: ~$0.01/GB.</td><td style="border:1px solid #555; padding:8px;">Multi-AZ = high availability. Single AZ = lower cost/latency. Always deploy stateless services across 2+ AZs.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Local Zones</strong></td><td style="border:1px solid #555; padding:8px;">AWS infrastructure placed in cities close to end users. Extension of a parent region.</td><td style="border:1px solid #555; padding:8px;">30+ Local Zones. Single-digit ms latency to nearby users.</td><td style="border:1px solid #555; padding:8px;">Use for: real-time gaming, video streaming, ML inference at the edge. NOT for core backend services.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Edge Locations</strong></td><td style="border:1px solid #555; padding:8px;">CloudFront CDN and Route 53 DNS endpoints. Serve cached content and DNS from 400+ locations worldwide.</td><td style="border:1px solid #555; padding:8px;">400+ edge locations. Sub-10ms DNS resolution.</td><td style="border:1px solid #555; padding:8px;">Static content, API caching, DDoS protection (Shield). Always mention CloudFront for read-heavy, globally distributed workloads.</td></tr>
+</table>
+
+<blockquote>
+💡 <em>When asked 'how do you handle multi-region?' the answer depends on WHY: latency (CloudFront/Local Zones), compliance (data residency), or disaster recovery (active-passive vs active-active). Always clarify the driver before proposing architecture.</em>
+</blockquote>
+
+<h3>AZ Design Patterns</h3>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:20%;">Pattern</th><th style="border:1px solid #555; padding:8px; text-align:left; width:40%;">How It Works</th><th style="border:1px solid #555; padding:8px; text-align:left;">When To Use</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Multi-AZ Active-Active</strong></td><td style="border:1px solid #555; padding:8px;">Services run in 2-3 AZs behind a load balancer. All AZs serve traffic simultaneously. ALB/NLB routes across AZs automatically.</td><td style="border:1px solid #555; padding:8px;">Default for all production stateless services. ECS/EKS tasks spread across AZs.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Multi-AZ Active-Standby</strong></td><td style="border:1px solid #555; padding:8px;">Primary in one AZ, standby in another. Automatic failover on failure. RDS Multi-AZ does this natively (synchronous replication, ~60s failover).</td><td style="border:1px solid #555; padding:8px;">Databases (RDS Multi-AZ), stateful workloads where active-active adds complexity.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Single-AZ</strong></td><td style="border:1px solid #555; padding:8px;">Everything in one AZ. No cross-AZ data transfer costs. No redundancy.</td><td style="border:1px solid #555; padding:8px;">Dev/test environments, cost-sensitive batch processing, workloads where downtime is acceptable.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Multi-Region Active-Passive</strong></td><td style="border:1px solid #555; padding:8px;">Primary region serves all traffic. Secondary region has infrastructure on standby. DNS failover (Route 53) switches traffic on primary failure.</td><td style="border:1px solid #555; padding:8px;">Disaster recovery. RPO depends on replication lag (Aurora Global: ~1s). RTO depends on failover automation (minutes to hours).</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Multi-Region Active-Active</strong></td><td style="border:1px solid #555; padding:8px;">Both regions serve traffic. DynamoDB Global Tables or Aurora Global Database for data sync. Route 53 latency-based routing.</td><td style="border:1px solid #555; padding:8px;">Global user base needing < 100ms latency everywhere. Very complex — conflict resolution required.</td></tr>
+</table>
+
+<hr>
+
+<h2>VPC — Virtual Private Cloud</h2>
+<p>VPC is the network foundation of everything you build on AWS. If you can't trace how a packet gets from the internet to your container and back, nothing else matters.</p>
+
+<h3>VPC Building Blocks</h3>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:12%;">Component</th><th style="border:1px solid #555; padding:8px; text-align:left; width:25%;">What It Is</th><th style="border:1px solid #555; padding:8px; text-align:left; width:30%;">Key Details</th><th style="border:1px solid #555; padding:8px; text-align:left;">Common Mistakes</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>VPC</strong></td><td style="border:1px solid #555; padding:8px;">Your isolated virtual network. A logical boundary for all your resources in a region.</td><td style="border:1px solid #555; padding:8px;">CIDR block (e.g., 10.0.0.0/16 = 65,536 IPs). Spans all AZs in a region. Cannot change CIDR after creation (but can add secondary CIDRs).</td><td style="border:1px solid #555; padding:8px;">Making CIDR too small. Use /16 for production VPCs — IP exhaustion is painful to fix later.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Subnet</strong></td><td style="border:1px solid #555; padding:8px;">A range of IPs within a VPC, tied to a single AZ. Where resources actually live.</td><td style="border:1px solid #555; padding:8px;">Public subnet: has route to Internet Gateway. Private subnet: no direct internet route. Typically 3 public + 3 private (one per AZ).</td><td style="border:1px solid #555; padding:8px;">Putting databases in public subnets. Only load balancers and bastion hosts belong in public subnets.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Internet Gateway (IGW)</strong></td><td style="border:1px solid #555; padding:8px;">Connects VPC to the internet. Allows resources with public IPs to be reached from outside.</td><td style="border:1px solid #555; padding:8px;">Highly available by design (AWS managed). One per VPC. Free to use.</td><td style="border:1px solid #555; padding:8px;">Forgetting that IGW alone isn't enough — subnet route table must have 0.0.0.0/0 pointing to it.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>NAT Gateway</strong></td><td style="border:1px solid #555; padding:8px;">Allows private subnet resources to reach the internet (for patches, API calls) without being reachable FROM the internet.</td><td style="border:1px solid #555; padding:8px;">~$0.045/hour + $0.045/GB processed. Deploy one per AZ for HA. Up to 45 Gbps bandwidth.</td><td style="border:1px solid #555; padding:8px;">Single NAT Gateway = single AZ failure point. Cost surprise at high volume — 2B events/day at 1KB = ~$2.7K/month in NAT charges alone.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Route Table</strong></td><td style="border:1px solid #555; padding:8px;">Rules that determine where network traffic is directed. Each subnet is associated with one route table.</td><td style="border:1px solid #555; padding:8px;">Local route (VPC CIDR) is always present and cannot be removed. Add 0.0.0.0/0 → IGW for public, 0.0.0.0/0 → NAT for private.</td><td style="border:1px solid #555; padding:8px;">Forgetting to associate the route table with the subnet. Default route table has no internet route.</td></tr>
+</table>
+
+<h3>Security: Security Groups vs NACLs</h3>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:15%;">Feature</th><th style="border:1px solid #555; padding:8px; text-align:left;">Security Group</th><th style="border:1px solid #555; padding:8px; text-align:left;">NACL (Network ACL)</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Level</strong></td><td style="border:1px solid #555; padding:8px;">Instance/ENI level (attached to resource)</td><td style="border:1px solid #555; padding:8px;">Subnet level (applies to all resources in subnet)</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>State</strong></td><td style="border:1px solid #555; padding:8px;">Stateful — return traffic automatically allowed</td><td style="border:1px solid #555; padding:8px;">Stateless — must explicitly allow return traffic (ephemeral ports)</td></tr>
+</table>
+
+<hr>
+
+<h2>Load Balancers — ALB vs NLB Deep Dive</h2>
+<p>This is one of the most commonly tested areas. You need to know not just which to pick, but WHY and what happens under the hood.</p>
+
+<h3>ALB vs NLB Comparison</h3>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:15%;">Feature</th><th style="border:1px solid #555; padding:8px; text-align:left;">ALB (Application Load Balancer)</th><th style="border:1px solid #555; padding:8px; text-align:left;">NLB (Network Load Balancer)</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Layer</strong></td><td style="border:1px solid #555; padding:8px;">Layer 7 (HTTP/HTTPS). Understands HTTP headers, paths, methods.</td><td style="border:1px solid #555; padding:8px;">Layer 4 (TCP/UDP/TLS). Sees only IP packets and port numbers.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Routing</strong></td><td style="border:1px solid #555; padding:8px;">Path-based (/api/* → service A), host-based (api.x.com → A), header/query string routing.</td><td style="border:1px solid #555; padding:8px;">Port-based only. All traffic on port 443 goes to same target group.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Latency</strong></td><td style="border:1px solid #555; padding:8px;">~1-5ms added latency (HTTP parsing, rule evaluation).</td><td style="border:1px solid #555; padding:8px;">~100-200 microseconds added. Near wire-speed.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Throughput</strong></td><td style="border:1px solid #555; padding:8px;">Scales automatically but has warm-up time. Request pre-warming for known traffic spikes.</td><td style="border:1px solid #555; padding:8px;">Millions of requests/sec. Handles sudden spikes without warm-up.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Static IP</strong></td><td style="border:1px solid #555; padding:8px;">No. Gets DNS name that resolves to changing IPs. Use Global Accelerator for stable IPs.</td><td style="border:1px solid #555; padding:8px;">Yes. One static IP per AZ. Can assign Elastic IPs.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>TLS Termination</strong></td><td style="border:1px solid #555; padding:8px;">Yes. Full HTTP/2 and gRPC support. Certificate management via ACM.</td><td style="border:1px solid #555; padding:8px;">Yes (TLS listener) but no HTTP awareness. Also supports TCP passthrough.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>WebSocket/SSE</strong></td><td style="border:1px solid #555; padding:8px;">Supports WebSocket natively. Sticky sessions available. Good for SSE.</td><td style="border:1px solid #555; padding:8px;">Supports any TCP connection. Better for long-lived connections at massive scale.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Health Checks</strong></td><td style="border:1px solid #555; padding:8px;">HTTP health checks (path, status codes, response body). Rich and flexible.</td><td style="border:1px solid #555; padding:8px;">TCP, HTTP, or HTTPS. TCP checks are faster (just connection open/close).</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Source IP</strong></td><td style="border:1px solid #555; padding:8px;">Client IP in X-Forwarded-For header. LB's own IP is what targets see.</td><td style="border:1px solid #555; padding:8px;">Preserves original client IP (for TCP). Targets see the real source IP.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Cost</strong></td><td style="border:1px solid #555; padding:8px;">~$0.0225/hour + $0.008/LCU (based on new connections, active connections, bandwidth, rules).</td><td style="border:1px solid #555; padding:8px;">~$0.0225/hour + $0.006/NLCU. Cheaper per unit at high throughput.</td></tr>
+</table>
+
+<h3>When To Use Which</h3>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:25%;">Scenario</th><th style="border:1px solid #555; padding:8px; text-align:left; width:15%;">Choice</th><th style="border:1px solid #555; padding:8px; text-align:left;">Why</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>REST/GraphQL API gateway</strong></td><td style="border:1px solid #555; padding:8px;">ALB</td><td style="border:1px solid #555; padding:8px;">Need path-based routing, HTTP headers, multiple services behind one LB.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>gRPC services</strong></td><td style="border:1px solid #555; padding:8px;">ALB</td><td style="border:1px solid #555; padding:8px;">Native HTTP/2 and gRPC support with target group routing.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Real-time event streaming (like DRIFT)</strong></td><td style="border:1px solid #555; padding:8px;">NLB</td><td style="border:1px solid #555; padding:8px;">Ultra-low latency, millions of connections, no HTTP overhead needed.</td></tr>
+</table>
+
+<hr>
+
+<h2>Compute — ECS vs EKS vs Lambda</h2>
+<table style="width:100%; border-collapse:collapse; margin-top:10px;">
+    <tr><th style="border:1px solid #555; padding:8px; text-align:left; width:12%;">Factor</th><th style="border:1px solid #555; padding:8px; text-align:left;">ECS (Fargate)</th><th style="border:1px solid #555; padding:8px; text-align:left;">ECS (EC2)</th><th style="border:1px solid #555; padding:8px; text-align:left;">EKS</th><th style="border:1px solid #555; padding:8px; text-align:left;">Lambda</th></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Ops Overhead</strong></td><td style="border:1px solid #555; padding:8px;">Minimal. No instances to manage.</td><td style="border:1px solid #555; padding:8px;">Medium. You manage the EC2 fleet + capacity.</td><td style="border:1px solid #555; padding:8px;">High. Kubernetes complexity. Control plane managed but worker nodes, networking, RBAC on you.</td><td style="border:1px solid #555; padding:8px;">None. Fully managed.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Best For</strong></td><td style="border:1px solid #555; padding:8px;">Microservices, APIs, background workers. Your default choice.</td><td style="border:1px solid #555; padding:8px;">GPU workloads, large persistent instances, cost optimization with Spot/RIs.</td><td style="border:1px solid #555; padding:8px;">Teams already invested in K8s, multi-cloud portability, complex service mesh needs.</td><td style="border:1px solid #555; padding:8px;">Event-driven, bursty, sub-1s functions, glue between services.</td></tr>
+    <tr><td style="border:1px solid #555; padding:8px;"><strong>Scaling</strong></td><td style="border:1px solid #555; padding:8px;">Task-level auto-scaling. 30-60s to launch new task.</td><td style="border:1px solid #555; padding:8px;">Instance + task scaling. Slower (instance launch + task).</td><td style="border:1px solid #555; padding:8px;">HPA/VPA + Cluster Autoscaler + Karpenter. Powerful but complex.</td><td style="border:1px solid #555; padding:8px;">Instant scale to 1000s. Cold start: 100ms-1s</td></tr>
+</table>
+`
             },
             {
                 shortcut: "J",
@@ -802,6 +1121,18 @@ GET /{code} → 302 redirect</pre>
     <li>When alert condition is breached, notification sent to configured channels (Slack, etc.)</li>
 </ol>
 
+<pre>  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+  │ Services │ ──→│  Ingest  │ ──→│  Store   │ ──→│  Query   │ ──→│Dashboard │
+  └──────────┘    └──────────┘    └──────────┘    └─────┬────┘    └──────────┘
+                                                        ↓
+                                                  ┌──────────┐
+                                                  │  Alert   │
+                                                  └─────┬────┘
+                                                        ↓
+                                                  ┌──────────┐
+                                                  │  Notify  │
+                                                  └──────────┘</pre>
+
 <hr>
 
 <h3>Phase 2: High-Level Design (5-6 mins)</h3>
@@ -828,11 +1159,22 @@ GET /{code} → 302 redirect</pre>
     <li><strong>Isolate/prioritize alerting reads</strong> so dashboard spikes don't break paging</li>
 </ul>
 
-<pre>Servers (with Agents) → Ingestion Service → Kafka → Ingestion Consumer → Time-Series DB (with rollups)
-                                                                              ↑ query
-                                                                         Query Service
-                                                                              ↑
-                                                                          Dashboard</pre>
+<pre>                                                          ┌ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+                                                            Multi-resolution
+  Servers                                                   │    rollups      │
+  ┌──┬──┐                                                   └ ─ ─ ─ ─┬─ ─ ─ ─┘
+  │  │  │    ┌───────────┐    ┌───────┐    ┌───────────┐    ┌────────┴───────┐
+  │  │  │ ──→│ Ingestion │ ──→│ Kafka │ ──→│ Ingestion │ ──→│  Time-Series   │
+  └──┴──┘    │  Service  │    └───────┘    │ Consumer  │    │      DB        │
+ (with       └───────────┘                 └───────────┘    └───────┬────────┘
+  Agents)                                                      query ↓
+                                                           ┌────────────────┐
+                                                           │  Query Service │
+                                                           └───────┬────────┘
+                                                                   ↓
+                                                           ┌────────────────┐
+                                                           │   Dashboard    │
+                                                           └────────────────┘</pre>
 
 <h4>3. Alerting & Notification — Two Separate Systems</h4>
 <p><strong>Key design decision:</strong> Evaluation and notification are deliberately separate systems. Different scaling/reliability profiles.</p>
@@ -853,11 +1195,24 @@ GET /{code} → 302 redirect</pre>
     <li><strong>Escalation:</strong> Re-notify through a different channel if nobody acknowledges within configured time</li>
 </ol>
 
-<pre>Alert Service ↔ Alerts DB (Postgres)
-     ↓ (alert fires)
-Notification Service ↔ Noti DB
-     ↓
-Slack / SMS / Pager</pre>
+<pre>  Servers
+  ┌──┬──┐    ┌───────────┐    ┌───────┐    ┌───────────┐    ┌────────────────┐
+  │  │  │ ──→│ Ingestion │ ──→│ Kafka │ ──→│ Ingestion │ ──→│  Time-Series   │
+  └──┴──┘    │  Service  │    └───────┘    │ Consumer  │    │      DB        │
+ (with       └───────────┘                 └───────────┘    └───────┬────────┘
+  Agents)                                                      query ↓
+                 ┌──────────┐    ┌───────────┐              ┌────────────────┐
+                 │ Alerts   │ ←──│  Alert    │ ←── query ── │  Query Service │
+                 │   DB     │ ──→│  Service  │              └───────┬────────┘
+                 └──────────┘    └─────┬─────┘                      ↓
+                                  alert fires              ┌────────────────┐
+                                       ↓                   │   Dashboard    │
+                 ┌──────────┐    ┌───────────┐             └────────────────┘
+                 │  Noti    │ ←──│   Noti    │
+                 │   DB     │ ──→│  Service  │
+                 └──────────┘    └──┬──┬──┬──┘
+                                    ↓  ↓  ↓
+                                Slack SMS Pager</pre>
 
 <hr>
 
@@ -899,17 +1254,57 @@ Slack / SMS / Pager</pre>
             },
             {
                 shortcut: "N",
-                title: "Netflix - Video Streaming",
-                tags: ["CDN", "encoding", "adaptive-bitrate", "recommendations"],
+                title: "Noisy Neighbor — CARL Format",
+                tags: ["incident", "DRIFT", "throttling", "cellular", "resilience", "quotas"],
                 points: [
-                    "Encoding: Multiple bitrates/resolutions per video (ABR)",
-                    "CDN: Open Connect, edge servers globally distributed",
-                    "Playback: Adaptive bitrate streaming (DASH/HLS)",
-                    "Recommendations: ML models, A/B testing framework",
-                    "Microservices: 1000+ services, Zuul gateway",
-                    "Resilience: Chaos engineering, circuit breakers",
-                    "Personalization: Thumbnails, rows customized per user"
-                ]
+                    "Context: DRIFT platform P2 — single producer deployed code creating connection per request, went 50→5000, saturated broker pools",
+                    "Action: Identified root cause via per-client metrics, throttled offending producer, owned stakeholder comms",
+                    "Systemic: Automated quotas, cellular isolation (blast radius), leading indicator alerting (< 60s detection)",
+                    "Result: 45 min stabilization, zero platform incidents since, two issues auto-throttled before impact",
+                    "Learning: Multi-tenant platforms need infra-layer governance; quotas aren't punitive — they're protective"
+                ],
+                walkthrough: `
+<h3>Noisy Neighbor — CARL Format</h3>
+
+<h4>Context</h4>
+<ul>
+    <li>DRIFT: shared event platform, 300+ producers, 2B events daily</li>
+    <li>P2 incident during end-of-day processing</li>
+    <li>Platform rejecting connections across all tenants</li>
+    <li>Root cause: single producer deployed code creating connection per request</li>
+    <li>Went from 50 to 5,000 connections in minutes</li>
+    <li>Saturated broker connection pools — everyone suffered</li>
+</ul>
+
+<h4>Action</h4>
+<ul>
+    <li><strong>Immediate:</strong> My SRE team identified root cause via per-client metrics. I made the call to throttle the offending producer — controversial but necessary. Owned stakeholder communication.</li>
+    <li><strong>Systemic — three requirements I set:</strong>
+        <ul>
+            <li>Automated quotas with self-service upgrades: Standard tier default, Resilience Scorecard for increases (Deployed)</li>
+            <li>Cellular isolation: Blast radius contained to single cell (Deployed)</li>
+            <li>Leading indicator alerting: Catch anomalies before saturation (Deployed)</li>
+        </ul>
+    </li>
+</ul>
+
+<h4>Result</h4>
+<ul>
+    <li>45 minutes to stabilization</li>
+    <li>Brief degradation, no data loss</li>
+    <li>Zero platform-level incidents since</li>
+    <li>Two issues automatically throttled before impact</li>
+    <li>Detection within 60 seconds</li>
+</ul>
+
+<h4>Learning</h4>
+<ul>
+    <li>Multi-tenant platforms require governance at the infrastructure layer</li>
+    <li>Can't rely on producers to behave — platform must protect itself</li>
+    <li>Moved from monolithic to cellular architecture</li>
+    <li>Quotas aren't punitive — they're protective</li>
+</ul>
+`
             },
             {
                 shortcut: "O",
@@ -956,30 +1351,336 @@ Slack / SMS / Pager</pre>
             {
                 shortcut: "R",
                 title: "Rate Limiter",
-                tags: ["throttling", "algorithms", "distributed", "API"],
+                tags: ["throttling", "algorithms", "distributed", "API", "Redis", "token-bucket"],
                 points: [
-                    "Token Bucket: Refill tokens at fixed rate, burst allowed",
-                    "Sliding Window: Count requests in rolling time window",
-                    "Fixed Window: Simple but has edge-case spikes",
-                    "Distributed: Redis for shared counter across instances",
-                    "Headers: Return X-RateLimit-Remaining, Retry-After",
-                    "Granularity: Per user, per IP, per API key",
-                    "Graceful: 429 status, queue requests if possible"
-                ]
+                    "Scope: Server-side rate limiting for social media API — limiting individual HTTP requests, not business operations",
+                    "Identify clients by User ID, IP address, or API key; limit via configurable rules (e.g., 100 req/min/user)",
+                    "Algorithm: Token Bucket via Redis preferred — handles bursty traffic with global state across gateways",
+                    "Atomicity: Lua script in Redis wraps read-calculate-update to prevent race conditions (double-spend)",
+                    "Scale: 1M RPS via Redis sharding + consistent hashing (10-20 shards), <10ms latency overhead",
+                    "HA: Master-replica replication with automatic failover; fail-closed preferred for high-traffic platforms",
+                    "Reject with HTTP 429 + headers (X-RateLimit-Limit, Remaining, Reset)"
+                ],
+                walkthrough: `
+<h3>Phase 1: Requirements (2-3 mins)</h3>
+
+<h4>Functional Requirements</h4>
+<p>Rate limiter for a social media platform's API:</p>
+<ul>
+    <li>Limiting individual HTTP requests (posting tweets, fetching timelines, uploading photos)</li>
+    <li>No high-level business operations — focus is on server-side traffic control</li>
+</ul>
+
+<p><strong>Core Requirements:</strong></p>
+<ol>
+    <li>Identify clients by <strong>User ID, IP address, or API key</strong> to apply appropriate limits</li>
+    <li>Limit HTTP requests based on <strong>configurable rules</strong> (e.g., 100 API requests per minute per user)</li>
+    <li>When limits exceeded, reject with <strong>HTTP 429</strong> and helpful headers (rate limit remaining, reset time)</li>
+</ol>
+
+<h4>Non-Functional Requirements</h4>
+<p><em>Best to ask interviewer about scale expectations.</em></p>
+<ul>
+    <li>Minimal latency overhead (<strong>&lt;10ms</strong> per request check)</li>
+    <li>Highly available — eventual consistency ok (slight delays in limit enforcement across nodes acceptable)</li>
+    <li><strong>1M requests/second</strong> across 100M DAU</li>
+</ul>
+
+<h4>Core Entities</h4>
+<ul>
+    <li><strong>Rules:</strong> Rate limiting policies — requests per time window, which clients it applies to, what endpoint it covers</li>
+    <li><strong>Clients:</strong> Entities being rate limited — users (user ID), IP addresses, API keys, or combination</li>
+    <li><strong>Requests:</strong> Incoming API requests evaluated against rules — carries client identity, endpoint, timestamp</li>
+</ul>
+
+<h4>System Interface</h4>
+<p>A rate limiter is an infrastructure component that other services call to check if a request should be allowed:</p>
+<pre>isRequestAllowed(clientId, ruleId) → { passes: boolean, remaining: number, resetTime: timestamp }</pre>
+<p>Response includes headers: <code>X-RateLimit-Remaining</code> and <code>X-RateLimit-Reset</code></p>
+
+<hr>
+
+<h3>Phase 2: High-Level Design (5-6 mins)</h3>
+
+<h4>1. Where does the rate limiter live?</h4>
+<p>At the <strong>API Gateway</strong> — determines what info we have access to and how it integrates. The rate limiter only has access to info in the HTTP request: URL/path, headers (Authorization, User-Agent, X-API-Key), query params, and client IP.</p>
+
+<p><strong>Client identification options:</strong> User ID, IP address, or API key</p>
+
+<h4>2. Rate Limiting Algorithms</h4>
+<p>Four main algorithms used in production:</p>
+<ul>
+    <li><strong>Fixed Window:</strong> Split time into fixed windows, keep per-user counter per window. Reject if exceeded until next window</li>
+    <li><strong>Sliding Window:</strong> Maintain list of request timestamps per user. Purge timestamps older than window (e.g., 60s) and count remaining</li>
+    <li><strong>Sliding Window Counter:</strong> Hybrid approach combining fixed and sliding</li>
+    <li><strong>Token Bucket:</strong> Each client has a bucket of tokens (burst capacity). Tokens refill at steady rate. Each request spends 1 token. No tokens → reject</li>
+</ul>
+
+<h4>3. Preferred: Token Bucket via Redis</h4>
+<p><strong>Why:</strong> Handles bursty traffic while maintaining global state across multiple servers.</p>
+
+<p><strong>Core logic:</strong> Instead of each API gateway keeping a local count, they all reference a centralized Redis store. If user requests split across gateways, total usage is still tracked against a single "global bucket."</p>
+
+<p><strong>Step-by-step flow:</strong></p>
+<ol>
+    <li><strong>Trigger:</strong> Request arrives at gateway with specific User ID</li>
+    <li><strong>State Retrieval:</strong> Gateway fetches from Redis: current token count + timestamp of last refill</li>
+    <li><strong>Calculation:</strong> Calculate new tokens earned based on elapsed time (e.g., 1 token/sec). Add to existing count, capped at max bucket capacity</li>
+    <li><strong>Decision:</strong>
+        <ul>
+            <li>tokens ≥ 1 → allowed, remove one token, save new count/timestamp to Redis</li>
+            <li>tokens &lt; 1 → rejected (rate limited)</li>
+        </ul>
+    </li>
+</ol>
+
+<p><strong>Key Technical Hurdle — Atomicity:</strong></p>
+<ul>
+    <li><strong>Problem:</strong> Standard "read-then-write" creates a race condition — two simultaneous requests see the same token and "double-spend" it</li>
+    <li><strong>Solution:</strong> Wrap the entire read-calculate-update into a <strong>Lua script</strong></li>
+    <li><strong>Why it works:</strong> Redis executes Lua scripts atomically. No other command can run mid-script, effectively locking the bucket for that microsecond — 100% race-condition free</li>
+</ul>
+
+<h4>4. Rejection Handling (HTTP 429)</h4>
+<ul>
+    <li>Failed requests get bounced immediately — no queue, no retry. Send 429 with helpful headers</li>
+    <li>Headers: <code>X-RateLimit-Limit</code>, <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code></li>
+</ul>
+
+<pre>                           Client
+                             ↓
+                       API Gateway
+                    (Rate Limiter here)
+                          ↓    ↓
+                   ┌──────┐    ┌──────────────┐
+                   │ Rule │    │ Token Bucket  │
+                   │ Store│    │   (Redis)     │
+                   └──────┘    └──────┬────────┘
+                                     ↓
+                          Allowed? ──→ Backend Services
+                          Denied?  ──→ HTTP 429 + Headers</pre>
+
+<hr>
+
+<h3>Phase 3: Deep Dives (6-8 mins)</h3>
+
+<h4>Deep Dive A: Scaling to 1M RPS</h4>
+<p><strong>Bottleneck:</strong> Single Redis instance handles 100-200k RPS. We need 1M RPS — one instance won't work.</p>
+<p><strong>Solution — Sharding & Consistent Hashing:</strong></p>
+<ul>
+    <li>Partition rate limiting data across multiple Redis shards</li>
+    <li><strong>Partition key:</strong> Hash the client's unique identifier (User ID, IP, API key) to determine which shard stores their bucket</li>
+    <li>Consistent hashing ensures all requests for a specific client always hit the same shard</li>
+    <li><strong>Linear scalability:</strong> Add more shards → capacity increases linearly. 10-20 shards sufficient for 1M RPS</li>
+</ul>
+
+<h4>Deep Dive B: High Availability & Fault Tolerance</h4>
+<p><strong>Failure mode — Fail-open vs Fail-closed:</strong></p>
+<ul>
+    <li><strong>Fail-closed preferred</strong> for high-traffic platforms — brief rejected requests are safer than total system collapse during viral events</li>
+</ul>
+<p><strong>Proactive prevention — HA design:</strong></p>
+<ul>
+    <li><strong>Master-Replica replication:</strong> Data replicated to standby nodes</li>
+    <li><strong>Automatic failover:</strong> Redis Cluster detects master failure and promotes a replica to new master without manual intervention</li>
+</ul>
+
+<h4>Deep Dive C: Hot Keys</h4>
+<p><strong>Problem:</strong> User keeps hammering after exhausting their token bucket allocation.</p>
+<ul>
+    <li><strong>Automatic blocking:</strong> Stop checking Redis after N consecutive rejections — short-circuit locally</li>
+    <li><strong>Edge-layer DDoS protection:</strong> Prevent abusive traffic from consuming infrastructure resources, ensuring legitimate users get fast rate limit checks</li>
+</ul>
+
+<h4>Deep Dive D: Minimizing Latency Overhead</h4>
+<p>Every check requires a network round trip to Redis. At 1M RPS, latency adds up.</p>
+<ul>
+    <li><strong>Connection Pooling (quickest win):</strong> Maintain a warm pool of persistent TCP connections instead of opening/closing per check — skip the costly handshake</li>
+    <li><strong>Geographic Distribution (biggest win):</strong> Distance = latency. If user is in Tokyo and Redis is in Virginia, physics slows you down. Deploy API gateways and Redis clusters in multiple regions close to end users</li>
+</ul>
+
+<h4>Deep Dive E: Dynamic Rule Configuration</h4>
+<p>Rules are dynamic — temporarily increase limits during product launches, premium users get higher limits.</p>
+<ul>
+    <li><strong>Push-based configuration:</strong> Zookeeper maintains config data and notifies all connected API Gateways immediately when any configuration changes</li>
+</ul>
+
+<h4>Deep Dive F: Observability & Alerting</h4>
+<p><strong>Metrics:</strong> p99 rate limit check latency, rejection rate per endpoint, Redis CPU/memory</p>
+<p><strong>Dashboard:</strong> Top rejected IPs/users (abuse patterns), rate limit hit distribution, Redis cluster health</p>
+<p><strong>Alerts:</strong></p>
+<ul>
+    <li>Rate limit check latency &gt; 10ms for 5 min</li>
+    <li>Single IP/user &gt; 10k requests/min</li>
+    <li>Redis failover events</li>
+</ul>
+<p><strong>Additional considerations:</strong> Graceful degradation, gradual rollout strategy, multi-region consistency (primary for writes, async replication to read replicas, accept eventual consistency)</p>
+`
             },
             {
                 shortcut: "S",
-                title: "Search Engine (Elasticsearch)",
-                tags: ["inverted-index", "sharding", "relevance", "aggregations"],
+                title: "Scout Engine — Operational Intelligence from Noise",
+                tags: ["ML", "incidents", "classification", "AIOps", "ITSM", "platform"],
                 points: [
-                    "Inverted Index: word → list of document IDs",
-                    "Tokenization: Analyzers break text into terms",
-                    "Sharding: Horizontal partitioning for scale",
-                    "Replicas: Redundancy and read throughput",
-                    "Ranking: TF-IDF, BM25, custom scoring functions",
-                    "Aggregations: Faceted search, analytics on data",
-                    "Near Real-time: Index refresh interval (1 sec default)"
-                ]
+                    "Context: Millions of ITSM events, data fragmented, critical signals buried in unstructured free text",
+                    "Problem: Same failures described inconsistently, no reliable way to correlate changes ↔ incidents, reactive firefighting",
+                    "Action: Time-boxed experiment — 1 engineer, 1 month, €0 budget. Built lightweight classifier to group similar tickets",
+                    "Scaling: Secured funding → Data Science (model training), Product (insights), Me (platform & operations)",
+                    "Platform: Three-layer architecture — ingestion, classification, visibility",
+                    "Results: 5 services caused ~40% of incidents, 30% reduction in recurring incidents, 55% faster triage",
+                    "Key Learning: Leverage wasn't ML — it was shared intelligence layer aligning ops, product, and leadership"
+                ],
+                walkthrough: `
+<h3>Scout (Operational Intelligence from Noise)</h3>
+
+<h4>Context</h4>
+<ul>
+    <li>Millions of ITSM events (incidents, changes, problems)</li>
+    <li>Data fragmented; critical signals buried in unstructured free text</li>
+    <li>Same failure described inconsistently; manual classification didn't scale
+        <ul><li>e.g., DB Timeout, ORA-12170</li></ul>
+    </li>
+    <li>No reliable way to correlate <strong>changes ↔ incidents</strong> or spot emerging patterns</li>
+    <li>Result: reactive firefighting, risk escalation, wasted engineering effort
+        <ul><li>I identified a structural gap no one owned yet</li></ul>
+    </li>
+</ul>
+
+<h4>Action</h4>
+<ul>
+    <li>Ran a time-boxed experiment: <strong>1 engineer, 1 month, €0 budget</strong></li>
+    <li>Goal wasn't production ML — just to validate whether signal existed</li>
+    <li>Built lightweight classifier to group similar tickets</li>
+    <li>Presented findings to my MD which coincided (during an AIOps vendor pitch)</li>
+    <li>Demonstrated that our highest-value insights came from internal context</li>
+    <li>Secured funding and formalized ownership:
+        <ul>
+            <li>Data Science → model training</li>
+            <li>Product → Insights</li>
+            <li>Me → platform and operations</li>
+        </ul>
+    </li>
+    <li>Scaled into a three-layer platform: ingestion, classification, visibility</li>
+</ul>
+
+<h4>Results</h4>
+<ul>
+    <li>Identified recurring failure themes and <strong>incident hotspots</strong></li>
+    <li><strong>5 services caused ~40% of incidents</strong> (clear risk concentration)</li>
+    <li><strong>30% reduction</strong> in recurring incidents via targeted fixes</li>
+    <li><strong>55% faster triage</strong> using similar-incident detection and resolution history</li>
+    <li>Shifted from reactive response to <strong>proactive intervention</strong></li>
+</ul>
+
+<h4>Key Learnings</h4>
+<ul>
+    <li>High-impact innovation doesn't require big teams or budgets
+        <ul><li>Prove value fast, then invest</li></ul>
+    </li>
+    <li>The leverage wasn't ML; it was shared intelligence layer aligning:
+        <ul>
+            <li>ops</li>
+            <li>product</li>
+            <li>leadership</li>
+        </ul>
+    </li>
+</ul>
+
+<hr>
+
+<h4>Architecture Flow</h4>
+<pre>[Data Sources]
+        ↓
+[DRIFT — Event Streaming]
+        ↓
+[SCOUT — ML Processing]
+        ↓
+[Outputs: Alerts, Dashboards, Correlations]</pre>
+
+<hr>
+
+<h4>Walk Through Each Layer</h4>
+
+<h4>1. Data Ingestion</h4>
+<blockquote>
+"SCOUT sits on top of DRIFT — our event streaming platform. We ingest:
+<ul>
+    <li>Incident tickets from ServiceNow</li>
+    <li>Change records</li>
+    <li>Container and VM telemetry</li>
+    <li>Application metrics</li>
+    <li>Deployment events</li>
+</ul>
+All normalized into a common schema, flowing through Kafka."
+</blockquote>
+
+<h4>2. Correlation Engine</h4>
+<blockquote>
+"First layer is correlation — linking related events. When an incident fires, we automatically ask: what changed in the last hour? What services are affected? What's the dependency chain?<br>
+This used to take 30 minutes of human investigation. Now it's seconds."
+</blockquote>
+
+<h4>3. ML Models</h4>
+<blockquote>
+"On top of correlation, we run ML models:
+<ul>
+    <li><strong>Anomaly detection:</strong> Baseline normal behavior, flag deviations before they become incidents</li>
+    <li><strong>Pattern recognition:</strong> Have we seen this failure signature before? What fixed it last time?</li>
+    <li><strong>Risk scoring:</strong> This change touches a high-risk service with no DR plan — flag it"</li>
+</ul>
+</blockquote>
+
+<h4>4. Outputs</h4>
+<blockquote>
+"Three main outputs:
+<ul>
+    <li><strong>Proactive alerts:</strong> Anomaly detected before users notice</li>
+    <li><strong>Enriched incidents:</strong> Incident ticket auto-populated with correlated changes, affected services, similar past incidents</li>
+    <li><strong>Dashboards:</strong> Operational health view — what's at risk, what's degraded, what changed"</li>
+</ul>
+</blockquote>
+
+<hr>
+
+<h4>Sketch If Asked</h4>
+<pre>[ServiceNow]  ───┐
+[Change Mgmt] ───┤──→ [DRIFT/Kafka] → [Correlation Engine] → [ML Models] → [Alerts]
+[Telemetry]   ───┤                            ↓                     ↓
+[Metrics]     ───┘                       [Graph DB]        [Enriched Incidents]
+                                       (Dependencies)              ↓
+                                                             [Dashboards]</pre>
+
+<hr>
+
+<h4>Results (Land the Impact)</h4>
+<blockquote>
+"Outcomes:
+<ul>
+    <li>MTTR reduced — investigations that took hours now take minutes</li>
+    <li>Proactive detection — we catch anomalies before P1s</li>
+    <li>Change correlation — 80% of incidents now auto-linked to a causal change</li>
+    <li>Reduced toil — SRE team shifted from manual correlation to reviewing recommendations"</li>
+</ul>
+</blockquote>
+
+<hr>
+
+<h4>Director-Level Ownership Framing</h4>
+<blockquote>
+"My team owns the platform — data ingestion, ML infrastructure, model serving. Data science partners own model development. Service teams consume the outputs. I own the outcomes."
+</blockquote>
+
+<hr>
+
+<h4>If They Probe Deeper</h4>
+<table>
+    <tr><th>Probe</th><th>Your Answer</th></tr>
+    <tr><td>"What ML models?"</td><td>"Anomaly detection using statistical baselines initially, exploring deep learning for pattern matching. My data science partners own model selection — I own the infrastructure to serve them."</td></tr>
+    <tr><td>"What's the latency?"</td><td>"Near real-time for correlation — seconds. ML inference is sub-second. Alert firing within a minute of anomaly."</td></tr>
+    <tr><td>"How do you handle false positives?"</td><td>"Feedback loop. Teams can dismiss alerts, that feeds back into model training. We tuned aggressively early — precision over recall."</td></tr>
+    <tr><td>"What's the hardest part?"</td><td>"Data quality. Garbage in, garbage out. We spent significant effort on schema normalization and data validation before ML added any value."</td></tr>
+</table>
+`
             },
             {
                 shortcut: "T",
@@ -1032,20 +1733,19 @@ POST /bookings/:eventId       → Booking</pre>
     <li>Users should be able to <strong>book</strong> events</li>
 </ul>
 
-<pre>Client → API Gateway (auth, rate limiting, routing)
-              ↓
-    ┌─────────────────────────────────┐
-    │  view(eventId)                  │
-    │  → Event Service → PostgreSQL   │
-    │                                 │
-    │  search(term, location, type)   │
-    │  → Search Service → PostgreSQL  │
-    │                                 │
-    │  book(ticketId, userId)         │
-    │  → Booking Service → PostgreSQL │
-    │         ↓                       │
-    │       Stripe                    │
-    └─────────────────────────────────┘</pre>
+<pre>                         Client
+                           ↓
+                    API Gateway
+              (auth, rate limiting, routing)
+                     ↓         ↓         ↓
+              ┌──────────┐ ┌──────────┐ ┌──────────────┐
+              │  Event   │ │  Search  │ │   Booking    │
+              │ Service  │ │ Service  │ │   Service    │
+              └────┬─────┘ └────┬─────┘ └───┬─────┬───┘
+                   ↓            ↓            ↓     ↓
+              PostgreSQL   PostgreSQL   PostgreSQL  Stripe
+
+  GET /events/:eventId     GET /events/search?keyword=   POST /bookings/:eventId</pre>
 
 <p><strong>Database Schema (PostgreSQL):</strong></p>
 <ul>
@@ -1101,13 +1801,25 @@ POST /bookings/:eventId       → Booking</pre>
     <li>Enable fuzzy search functionality with Elasticsearch</li>
 </ul>
 
-<pre>Search query: GET /search?term={term}&location={location}&type={type}&date={date} → Partial&lt;Event&gt;[]
+<pre>                              Client
+                                ↓
+                 Virtual Waiting Queue (peak traffic)
+                                ↓
+                          API Gateway
+                    ↓           ↓           ↓
+             ┌───────────┐ ┌───────────┐ ┌─────────────┐
+             │  Search   │ │   Event   │ │   Booking   │
+             │  Service  │ │  Service  │ │   Service   │
+             └─────┬─────┘ └──┬────┬───┘ └──┬──────┬───┘
+                   ↓          ↓    ↓        ↓      ↓
+            Elasticsearch   Redis  DB   Ticket    Stripe
+            (fuzzy search) (cache)  ↑   Lock
+                   ↑               │   (Redis,
+               CDC sync ───────────┘    TTL 10m)
+                                        ↓
+                                   PostgreSQL
 
-Client → API Gateway → Search Service → Elasticsearch (indexed via CDC from PostgreSQL)
-                      → Event Service → Redis (event cache) → PostgreSQL
-                      → Booking Service → Ticket Lock (Redis, TTL 10 min) → PostgreSQL → Stripe
-                                ↑
-                        Virtual Waiting Queue</pre>
+  GET /search?term=    GET /events/:id    POST /bookings/:eventId</pre>
 `
             },
             {
@@ -1251,9 +1963,30 @@ Client → API Gateway → Search Service → Elasticsearch (indexed via CDC fro
     <li>Advertisers query OLAP DB via Analytics Service for near-realtime metrics</li>
 </ul>
 
-<pre>Browser → LB & API Gateway → Click Processor → Kinesis → Flink → OLAP DB
-                ↓                                                    ↑
-         Ad Placement Service ↔ Ad DB                     Analytics Service → Analyst Browser</pre>
+<pre>                    Advertisement:                    ┌─────────────┐
+                     - AdId                           │   Analyst   │
+                     - RedirectUrl                    │   Browser   │
+                     - ... metadata                   └──────┬──────┘
+                                                             ↓
+  ┌───────────────┐         ┌──────────┐              ┌─────────────┐
+  │ Ad Placement  │ ←──────→│  Ad DB   │              │  Analytics  │
+  │   Service     │         └──────────┘              │   Service   │
+  └───────┬───────┘                                   └──────┬──────┘
+          ↓                                                  ↑
+  ┌───────────────┐                          Aggregated Data │
+  │               │                            - AdId        │
+  │    Browser    │                            - Minute      │
+  │               │                            - Click Count │
+  └───────┬───────┘                           ┌──────────────┘
+          ↓                                   │
+  ┌───────────────┐    ┌──────────┐    ┌──────┴──────┐
+  │    Click      │ ──→│ Kinesis  │ ──→│    Flink    │
+  │  Processor    │    └──────────┘    │             │
+  └───────────────┘                    └──────┬──────┘
+                                              ↓
+                                       ┌──────────┐
+                                       │ OLAP DB  │
+                                       └──────────┘</pre>
 
 <hr>
 
@@ -1294,11 +2027,39 @@ Client → API Gateway → Search Service → Elasticsearch (indexed via CDC fro
 <hr>
 
 <h3>Phase 4: Final Architecture</h3>
-<pre>Browser → LB & API Gateway → Click Processor → Kinesis → Flink → OLAP DB
-                ↓                    ↓                              ↑
-         Ad Placement Service    Cache (dedup)              Reconciliation Worker
-              ↕                     ↓                              ↑
-           Ad DB            Raw Click Data (S3) → Spark (MapReduce) via cron</pre>
+<pre>  - generate ad impression id as         Advertisement:                    ┌─────────────┐
+    idempotency key and store             - AdId                           │   Analyst   │
+    in cache                              - RedirectUrl                    │   Browser   │
+                                          - ... metadata                   └──────┬──────┘
+                                                                                  ↓
+              ┌───────────────┐         ┌──────────┐              ┌───────────────────┐
+              │ Ad Placement  │ ←──────→│  Ad DB   │              │     Analytics     │
+              │   Service     │         └──────────┘              │      Service      │
+              └───────┬───────┘                                   └─────────┬─────────┘
+                      ↓                                        Aggregated   ↑
+  ┌──────────┐  ┌───────────┐                                  Data:       │
+  │          │  │  LB & API │    ┌──────────┐                  - AdId      │
+  │ Browser  │──│  Gateway  │    │  Cache   │                  - AdvertiserId (PK)
+  │          │  └─────┬─────┘    │ (dedup)  │                  - Minute (SK)│
+  └──────────┘        ↓         └────┬─────┘                   - Click Count│
+              ┌───────────────┐      │                                     │
+              │    Click      │──────┘                         ┌───────────┴───┐
+              │  Processor    │                                │    OLAP DB    │
+              └───────┬───────┘                                └──┬────────┬──┘
+                      ↓           - Both Kinesis and Flink        │   potentially fix
+              ┌───────────────┐     partition by AdId with        │   incorrect records
+              │   Kinesis     │     celebrity solution for        ↓
+              │               │     hot shards              ┌──────────────┐
+              └───────┬───────┘   - 7 day retention on      │Reconciliation│
+                      ↓             Kinesis                 │    Worker    │
+              ┌───────────────┐                             └──────┬───────┘
+              │    Flink      │                                    ↑
+              └───────┬───────┘                             ┌──────┴───────┐
+                      ↓                                     │    Spark     │
+              ┌───────────────┐                             │ (MapReduce)  │
+              │  Raw Click    │ ───────────────────────────→ └──────┬───────┘
+              │  Data (S3)    │                                    ↑
+              └───────────────┘                               ← cron</pre>
 <p><strong>Key additions over basic design:</strong></p>
 <ul>
     <li>Impression ID idempotency with cache for abuse prevention</li>
